@@ -6,6 +6,9 @@ import { runSemanticRetrieval } from "@/lib/retrieval/service";
 import { getServerEnv } from "@/lib/env";
 import { getMemoryHighlights, getRecentConversationTurns } from "@/lib/memory/service";
 import { estimateTokenCountForMessages } from "@/lib/memory/tokens";
+import { logWarn } from "@/lib/observability/logger";
+import { MemoryHighlight } from "@/lib/memory/types";
+import { RetrievalMatch } from "@/lib/retrieval/types";
 
 export async function getAssistantContextForUser(
   userId: string,
@@ -29,22 +32,39 @@ export async function getAssistantContextForUser(
 
   const recentConversation = await getRecentConversationTurns(conversationId, env.PHASE6_RECENT_MESSAGE_LIMIT);
 
-  const knowledgeHighlights = query?.trim()
-    ? await runSemanticRetrieval({
+  let knowledgeHighlights: RetrievalMatch[] = [];
+  let memoryHighlights: MemoryHighlight[] = [];
+
+  if (query?.trim()) {
+    try {
+      knowledgeHighlights = await runSemanticRetrieval({
         userId,
         query,
         limit: 4,
         sourceTypes: ["NOTE", "FILE"],
-      })
-    : [];
+      });
+    } catch (error) {
+      logWarn("assistant.context.knowledge-retrieval-failed", {
+        userId,
+        query,
+        error,
+      });
+    }
 
-  const memoryHighlights = query?.trim()
-    ? await getMemoryHighlights({
+    try {
+      memoryHighlights = await getMemoryHighlights({
         userId,
         query,
         limit: 4,
-      })
-    : [];
+      });
+    } catch (error) {
+      logWarn("assistant.context.memory-retrieval-failed", {
+        userId,
+        query,
+        error,
+      });
+    }
+  }
 
   const recentConversationTokens = estimateTokenCountForMessages(recentConversation);
   const remainingBudget = Math.max(0, env.PHASE6_CONTEXT_TOKEN_BUDGET - recentConversationTokens);
