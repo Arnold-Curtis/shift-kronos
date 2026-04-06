@@ -1,47 +1,28 @@
-export const primaryNavigation = [
+export type TabItem = {
+  href: string;
+  label: string;
+  icon: "home" | "calendar" | "message-circle" | "user";
+};
+
+export const tabs: TabItem[] = [
   {
-    href: "/dashboard",
-    label: "Dashboard",
-    description: "Today, upcoming focus, and core system health.",
+    href: "/",
+    label: "Home",
+    icon: "home",
   },
   {
-    href: "/reminders",
-    label: "Reminders",
-    description: "One-time, recurring, habits, and inbox capture.",
-  },
-  {
-    href: "/timetable",
-    label: "Timetable",
-    description: "Semester-aware class schedule and import workflow.",
+    href: "/calendar",
+    label: "Calendar",
+    icon: "calendar",
   },
   {
     href: "/chat",
     label: "Chat",
-    description: "Grounded assistant chat, quick capture, and schedule questions.",
+    icon: "message-circle",
   },
   {
-    href: "/notes",
-    label: "Notes",
-    description: "Structured capture for second-brain context.",
+    href: "/me",
+    label: "Me",
+    icon: "user",
   },
-  {
-    href: "/files",
-    label: "Files",
-    description: "Blob-backed file storage and retrieval foundation.",
-  },
-  {
-    href: "/settings",
-    label: "Settings",
-    description: "Timezone, Telegram wiring, and future preferences.",
-  },
-] as const;
-
-export const foundationChecklist = [
-  "Next.js application shell with App Router and TypeScript",
-  "Dark-first responsive layout and navigation",
-  "Typed environment validation",
-  "Prisma database boundary and schema foundation",
-  "Clerk authentication wiring",
-  "Blob integration boundary for future uploads",
-  "Testing baseline with lint, typecheck, build, and unit tests",
 ];

@@ -26,21 +26,15 @@ export function AiSettingsForm({
   currentTranscriptionProvider,
   currentTranscriptionModel,
 }: AiSettingsFormProps) {
-  const assistantModelLooksLegacy =
-    currentAssistantProvider === "openrouter" && Boolean(currentAssistantModel) && !currentAssistantModel.includes("/");
-
   return (
-    <form action={updateUserAiSettingsAction} className="grid gap-4">
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="rounded-2xl border border-border bg-black/10 px-4 py-4">
-          <label className="text-sm font-semibold text-foreground" htmlFor="assistantProvider">
-            Assistant provider
-          </label>
+    <form action={updateUserAiSettingsAction} className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="space-y-1.5 text-sm">
+          <span className="block font-medium text-text-primary">Assistant provider</span>
           <select
-            id="assistantProvider"
             name="assistantProvider"
             defaultValue={currentAssistantProvider}
-            className="mt-3 w-full rounded-2xl border border-border bg-panel px-4 py-3 text-sm text-foreground outline-none"
+            className="input-field"
           >
             {assistantOptions.map((option) => (
               <option key={option.value} value={option.value}>
@@ -48,41 +42,27 @@ export function AiSettingsForm({
               </option>
             ))}
           </select>
-          <p className="mt-3 text-sm leading-6 text-foreground-muted">
-            OpenRouter is the assistant backend for chat, quick capture, and grounded answers. The model can be changed later without changing the integration.
-          </p>
-        </div>
+        </label>
 
-        <div className="rounded-2xl border border-border bg-black/10 px-4 py-4">
-          <label className="text-sm font-semibold text-foreground" htmlFor="assistantModel">
-            Assistant model
-          </label>
+        <label className="space-y-1.5 text-sm">
+          <span className="block font-medium text-text-primary">Assistant model</span>
           <input
-            id="assistantModel"
             name="assistantModel"
             defaultValue={currentAssistantModel}
             required
-            className="mt-3 w-full rounded-2xl border border-border bg-panel px-4 py-3 text-sm text-foreground outline-none"
+            className="input-field"
           />
-          <p className="mt-3 text-sm leading-6 text-foreground-muted">
-            Recommended models: {assistantOptions.flatMap((option) => option.suggestedModels).join(", ")}.
+          <p className="text-xs text-text-tertiary">
+            e.g. {assistantOptions.flatMap((o) => o.suggestedModels).slice(0, 2).join(", ")}
           </p>
-          {assistantModelLooksLegacy ? (
-            <p className="mt-3 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm leading-6 text-amber-100">
-              The saved assistant model looks like a legacy non-OpenRouter id. Saving settings will reset it to a compatible OpenRouter model automatically.
-            </p>
-          ) : null}
-        </div>
+        </label>
 
-        <div className="rounded-2xl border border-border bg-black/10 px-4 py-4">
-          <label className="text-sm font-semibold text-foreground" htmlFor="transcriptionProvider">
-            Transcription provider
-          </label>
+        <label className="space-y-1.5 text-sm">
+          <span className="block font-medium text-text-primary">Transcription provider</span>
           <select
-            id="transcriptionProvider"
             name="transcriptionProvider"
             defaultValue={currentTranscriptionProvider}
-            className="mt-3 w-full rounded-2xl border border-border bg-panel px-4 py-3 text-sm text-foreground outline-none"
+            className="input-field"
           >
             {transcriptionOptions.map((option) => (
               <option key={option.value} value={option.value}>
@@ -90,32 +70,23 @@ export function AiSettingsForm({
               </option>
             ))}
           </select>
-          <p className="mt-3 text-sm leading-6 text-foreground-muted">
-            Recorded audio is uploaded and transcribed through this provider before entering the assistant workflow.
-          </p>
-        </div>
+        </label>
 
-        <div className="rounded-2xl border border-border bg-black/10 px-4 py-4">
-          <label className="text-sm font-semibold text-foreground" htmlFor="transcriptionModel">
-            Transcription model
-          </label>
+        <label className="space-y-1.5 text-sm">
+          <span className="block font-medium text-text-primary">Transcription model</span>
           <input
-            id="transcriptionModel"
             name="transcriptionModel"
             defaultValue={currentTranscriptionModel}
             required
-            className="mt-3 w-full rounded-2xl border border-border bg-panel px-4 py-3 text-sm text-foreground outline-none"
+            className="input-field"
           />
-          <p className="mt-3 text-sm leading-6 text-foreground-muted">
-            Example models: {transcriptionOptions.flatMap((option) => option.suggestedModels).join(", ")}.
-          </p>
-        </div>
+        </label>
       </div>
 
       <SubmitButton
-        idleLabel="Save AI settings"
-        pendingLabel="Saving AI settings"
-        className="w-full rounded-2xl bg-accent px-4 py-3 text-sm font-semibold text-white transition hover:bg-violet-500 sm:w-auto"
+        idleLabel="Save"
+        pendingLabel="Saving..."
+        className="btn-primary w-full sm:w-auto"
       />
     </form>
   );

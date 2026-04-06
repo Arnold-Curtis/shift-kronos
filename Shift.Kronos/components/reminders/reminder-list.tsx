@@ -1,65 +1,102 @@
-import { completeReminderAction, reactivateReminderAction } from "@/app/reminders/actions";
-import { SectionCard } from "@/components/dashboard/section-card";
-import { SubmitButton } from "@/components/forms/submit-button";
+"use client";
+
+import { GlassCard } from "@/components/ui/glass-card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { TimeLabel } from "@/components/ui/time-label";
 import { ReminderBadge } from "@/components/reminders/reminder-badge";
-import { formatDateTimeLabel } from "@/lib/datetime";
-import { ReminderViewModel } from "@/lib/reminders/types";
+import { completeReminderAction, reactivateReminderAction } from "@/app/reminders/actions";
+import { ListChecks, Check, RotateCcw } from "lucide-react";
+
+type Reminder = {
+  id: string;
+  title: string;
+  description: string | null;
+  type: string;
+  priority: string;
+  category: string | null;
+  tags: string[];
+  dueAt: Date | null;
+  status: string;
+};
 
 type ReminderListProps = {
   title: string;
-  description: string;
-  reminders: ReminderViewModel[];
+  description?: string;
+  reminders: Reminder[];
   emptyState: string;
   showReactivate?: boolean;
 };
 
-export function ReminderList({ title, description, reminders, emptyState, showReactivate }: ReminderListProps) {
+export function ReminderList({
+  title,
+  reminders,
+  emptyState,
+  showReactivate,
+}: ReminderListProps) {
+  if (reminders.length === 0) {
+    return (
+      <GlassCard>
+        <EmptyState icon={ListChecks} title={emptyState} />
+      </GlassCard>
+    );
+  }
+
   return (
-    <SectionCard title={title} description={description}>
-      {reminders.length === 0 ? (
-        <p className="rounded-2xl border border-dashed border-border px-4 py-4 text-sm leading-6 text-foreground-muted">
-          {emptyState}
-        </p>
-      ) : (
-        <div className="space-y-3">
-          {reminders.map((reminder) => (
-            <article key={reminder.id} className="rounded-2xl border border-border bg-black/10 px-4 py-4">
-              <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-                <div className="space-y-2">
-                  <div className="flex flex-wrap gap-2">
-                    <ReminderBadge type={reminder.type} />
-                    <ReminderBadge priority={reminder.priority} label={reminder.priority} />
-                    {reminder.category ? <ReminderBadge label={reminder.category} /> : null}
-                  </div>
-
-                  <div>
-                    <h3 className="text-base font-semibold text-foreground">{reminder.title}</h3>
-                    {reminder.description ? (
-                      <p className="mt-1 text-sm leading-6 text-foreground-muted">{reminder.description}</p>
-                    ) : null}
-                  </div>
-
-                  <div className="flex flex-wrap gap-4 text-sm text-foreground-muted">
-                    {reminder.dueAt ? <span>Due {formatDateTimeLabel(reminder.dueAt)}</span> : <span>Unscheduled</span>}
-                    {reminder.recurrenceLabel ? <span>{reminder.recurrenceLabel}</span> : null}
-                    {reminder.countdownDays !== null ? <span>{reminder.countdownDays} days remaining</span> : null}
-                    {reminder.tags.length > 0 ? <span>Tags: {reminder.tags.join(", ")}</span> : null}
-                  </div>
-                </div>
-
-                <form action={showReactivate ? reactivateReminderAction : completeReminderAction}>
-                  <input type="hidden" name="id" value={reminder.id} />
-                  <SubmitButton
-                    idleLabel={showReactivate ? "Mark active" : "Complete"}
-                    pendingLabel={showReactivate ? "Reactivating" : "Completing"}
-                    className="rounded-full border border-border px-4 py-2 text-sm font-semibold text-foreground-muted transition hover:border-white/20 hover:text-foreground"
-                  />
-                </form>
+    <div className="space-y-2">
+      <h3 className="px-1 text-xs font-semibold uppercase tracking-widest text-text-tertiary">
+        {title}
+        <span className="ml-1.5 text-text-tertiary">{reminders.length}</span>
+      </h3>
+      <div className="space-y-1.5">
+        {reminders.map((reminder) => (
+          <GlassCard key={reminder.id} variant="interactive" padding="sm">
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5">
+                {showReactivate ? (
+                  <form action={reactivateReminderAction}>
+                    <input type="hidden" name="reminderId" value={reminder.id} />
+                    <button
+                      type="submit"
+                      className="flex h-6 w-6 items-center justify-center rounded-md text-text-tertiary transition hover:bg-bg-surface-hover hover:text-accent-light"
+                      title="Reactivate"
+                    >
+                      <RotateCcw size={13} />
+                    </button>
+                  </form>
+                ) : (
+                  <form action={completeReminderAction}>
+                    <input type="hidden" name="reminderId" value={reminder.id} />
+                    <button
+                      type="submit"
+                      className="flex h-6 w-6 items-center justify-center rounded-full border border-border-default text-transparent transition hover:border-success hover:bg-success-muted hover:text-success"
+                      title="Complete"
+                    >
+                      <Check size={12} />
+                    </button>
+                  </form>
+                )}
               </div>
-            </article>
-          ))}
-        </div>
-      )}
-    </SectionCard>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <h4 className={`truncate text-sm font-medium ${
+                    reminder.status === "COMPLETED" ? "line-through text-text-tertiary" : "text-text-primary"
+                  }`}>
+                    {reminder.title}
+                  </h4>
+                  <ReminderBadge type={reminder.type} priority={reminder.priority} />
+                </div>
+                {reminder.description && (
+                  <p className="mt-0.5 truncate text-xs text-text-tertiary">{reminder.description}</p>
+                )}
+              </div>
+              <TimeLabel
+                date={reminder.dueAt}
+                className="shrink-0 text-xs text-text-secondary"
+              />
+            </div>
+          </GlassCard>
+        ))}
+      </div>
+    </div>
   );
 }

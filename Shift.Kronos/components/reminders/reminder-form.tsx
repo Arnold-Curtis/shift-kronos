@@ -23,90 +23,88 @@ const recurrenceFrequencies = [
 
 export function ReminderForm() {
   return (
-    <form action={createReminderAction} className="grid gap-4 rounded-3xl border border-border bg-panel px-5 py-5">
-      <div className="grid gap-4 md:grid-cols-2">
-        <label className="space-y-2 text-sm text-foreground-muted">
-          <span className="block font-medium text-foreground">Title</span>
-          <input name="title" required className="w-full rounded-2xl border border-border bg-black/10 px-4 py-3 text-foreground outline-none" />
+    <form action={createReminderAction} className="glass space-y-4 p-4">
+      <h3 className="text-sm font-semibold text-text-primary">New Reminder</h3>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="space-y-1.5 text-sm">
+          <span className="block font-medium text-text-primary">Title</span>
+          <input name="title" required className="input-field" placeholder="What to remember?" />
         </label>
 
-        <label className="space-y-2 text-sm text-foreground-muted">
-          <span className="block font-medium text-foreground">Type</span>
-          <select name="type" defaultValue="ONE_TIME" className="w-full rounded-2xl border border-border bg-black/10 px-4 py-3 text-foreground outline-none">
+        <label className="space-y-1.5 text-sm">
+          <span className="block font-medium text-text-primary">Type</span>
+          <select name="type" defaultValue="ONE_TIME" className="input-field">
             {reminderTypes.map((type) => (
-              <option key={type.value} value={type.value}>
-                {type.label}
-              </option>
+              <option key={type.value} value={type.value}>{type.label}</option>
             ))}
           </select>
         </label>
       </div>
 
-      <label className="space-y-2 text-sm text-foreground-muted">
-        <span className="block font-medium text-foreground">Description</span>
-        <textarea name="description" rows={3} className="w-full rounded-2xl border border-border bg-black/10 px-4 py-3 text-foreground outline-none" />
+      <label className="block space-y-1.5 text-sm">
+        <span className="font-medium text-text-primary">Description</span>
+        <textarea name="description" rows={2} className="input-field" placeholder="Optional details..." />
       </label>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <label className="space-y-2 text-sm text-foreground-muted">
-          <span className="block font-medium text-foreground">Priority</span>
-          <select name="priority" defaultValue="MEDIUM" className="w-full rounded-2xl border border-border bg-black/10 px-4 py-3 text-foreground outline-none">
-            {priorities.map((priority) => (
-              <option key={priority.value} value={priority.value}>
-                {priority.label}
-              </option>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <label className="space-y-1.5 text-sm">
+          <span className="block font-medium text-text-primary">Priority</span>
+          <select name="priority" defaultValue="MEDIUM" className="input-field">
+            {priorities.map((p) => (
+              <option key={p.value} value={p.value}>{p.label}</option>
             ))}
           </select>
         </label>
 
-        <label className="space-y-2 text-sm text-foreground-muted">
-          <span className="block font-medium text-foreground">Category</span>
-          <input name="category" className="w-full rounded-2xl border border-border bg-black/10 px-4 py-3 text-foreground outline-none" />
+        <label className="space-y-1.5 text-sm">
+          <span className="block font-medium text-text-primary">Category</span>
+          <input name="category" className="input-field" placeholder="e.g. school" />
         </label>
 
-        <label className="space-y-2 text-sm text-foreground-muted">
-          <span className="block font-medium text-foreground">Tags</span>
-          <input name="tags" placeholder="school, admin, urgent" className="w-full rounded-2xl border border-border bg-black/10 px-4 py-3 text-foreground outline-none" />
+        <label className="space-y-1.5 text-sm">
+          <span className="block font-medium text-text-primary">Tags</span>
+          <input name="tags" className="input-field" placeholder="school, admin" />
         </label>
 
-        <label className="space-y-2 text-sm text-foreground-muted">
-          <span className="block font-medium text-foreground">Due at</span>
-          <input name="dueAt" type="datetime-local" className="w-full rounded-2xl border border-border bg-black/10 px-4 py-3 text-foreground outline-none" />
+        <label className="space-y-1.5 text-sm">
+          <span className="block font-medium text-text-primary">Due at</span>
+          <input name="dueAt" type="datetime-local" className="input-field" />
         </label>
       </div>
 
-      <div className="grid gap-4 rounded-2xl border border-border bg-black/10 px-4 py-4 md:grid-cols-4">
-        <label className="space-y-2 text-sm text-foreground-muted">
-          <span className="block font-medium text-foreground">Recurrence frequency</span>
-          <select name="recurrenceFrequency" defaultValue="DAILY" className="w-full rounded-2xl border border-border bg-panel px-4 py-3 text-foreground outline-none">
-            {recurrenceFrequencies.map((frequency) => (
-              <option key={frequency.value} value={frequency.value}>
-                {frequency.label}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="space-y-2 text-sm text-foreground-muted">
-          <span className="block font-medium text-foreground">Interval</span>
-          <input name="recurrenceInterval" type="number" min="1" defaultValue="1" className="w-full rounded-2xl border border-border bg-panel px-4 py-3 text-foreground outline-none" />
-        </label>
-
-        <label className="space-y-2 text-sm text-foreground-muted">
-          <span className="block font-medium text-foreground">Weekdays</span>
-          <input name="recurrenceDays" placeholder="1,3,5" className="w-full rounded-2xl border border-border bg-panel px-4 py-3 text-foreground outline-none" />
-        </label>
-
-        <label className="space-y-2 text-sm text-foreground-muted">
-          <span className="block font-medium text-foreground">Recurrence ends</span>
-          <input name="recurrenceEndAt" type="datetime-local" className="w-full rounded-2xl border border-border bg-panel px-4 py-3 text-foreground outline-none" />
-        </label>
-      </div>
+      <details className="group">
+        <summary className="cursor-pointer text-xs font-medium text-text-tertiary transition hover:text-text-secondary">
+          Recurrence options ▾
+        </summary>
+        <div className="mt-3 grid gap-3 rounded-xl border border-border-subtle bg-bg-surface p-3 sm:grid-cols-2 lg:grid-cols-4">
+          <label className="space-y-1.5 text-sm">
+            <span className="block font-medium text-text-primary">Frequency</span>
+            <select name="recurrenceFrequency" defaultValue="DAILY" className="input-field">
+              {recurrenceFrequencies.map((f) => (
+                <option key={f.value} value={f.value}>{f.label}</option>
+              ))}
+            </select>
+          </label>
+          <label className="space-y-1.5 text-sm">
+            <span className="block font-medium text-text-primary">Interval</span>
+            <input name="recurrenceInterval" type="number" min="1" defaultValue="1" className="input-field" />
+          </label>
+          <label className="space-y-1.5 text-sm">
+            <span className="block font-medium text-text-primary">Weekdays</span>
+            <input name="recurrenceDays" placeholder="1,3,5" className="input-field" />
+          </label>
+          <label className="space-y-1.5 text-sm">
+            <span className="block font-medium text-text-primary">Ends</span>
+            <input name="recurrenceEndAt" type="datetime-local" className="input-field" />
+          </label>
+        </div>
+      </details>
 
       <SubmitButton
         idleLabel="Save reminder"
-        pendingLabel="Saving reminder"
-        className="w-full rounded-2xl bg-accent px-4 py-3 text-sm font-semibold text-white transition hover:bg-violet-500 sm:w-auto"
+        pendingLabel="Saving..."
+        className="btn-primary w-full sm:w-auto"
       />
     </form>
   );

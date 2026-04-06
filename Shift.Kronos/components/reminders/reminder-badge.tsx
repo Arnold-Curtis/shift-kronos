@@ -1,18 +1,29 @@
-import { ReminderPriority, ReminderType } from "@prisma/client";
-import { cn } from "@/lib/utils";
-
 type ReminderBadgeProps = {
-  type?: ReminderType;
-  priority?: ReminderPriority;
-  label?: string;
+  type: string;
+  priority: string;
 };
 
-export function ReminderBadge({ type, priority, label }: ReminderBadgeProps) {
-  const tone = priority === "HIGH" ? "border-danger/40 text-danger" : priority === "LOW" ? "border-border text-foreground-muted" : "border-accent/30 text-accent";
+const priorityColors: Record<string, string> = {
+  HIGH: "bg-danger-muted text-danger",
+  MEDIUM: "bg-warning-muted text-warning",
+  LOW: "bg-bg-surface text-text-tertiary",
+};
+
+const typeLabels: Record<string, string> = {
+  ONE_TIME: "Once",
+  RECURRING: "Recurring",
+  HABIT: "Habit",
+  COUNTDOWN: "Countdown",
+  INBOX: "Inbox",
+};
+
+export function ReminderBadge({ type, priority }: ReminderBadgeProps) {
+  const color = priorityColors[priority] ?? priorityColors.LOW;
+  const label = typeLabels[type] ?? type;
 
   return (
-    <span className={cn("rounded-full border px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]", tone)}>
-      {label ?? type?.replaceAll("_", " ")}
+    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${color}`}>
+      {label}
     </span>
   );
 }

@@ -1,18 +1,10 @@
-import { AppShell } from "@/components/layout/app-shell";
-import { LoadingCard } from "@/components/feedback/loading-card";
+import { SkeletonCard, Skeleton } from "@/components/ui/skeleton";
 
 export default function TimetableLoading() {
   return (
-    <AppShell
-      title="Semester-aware timetable management"
-      eyebrow="Phase 7"
-      description="Loading timetable entries, weekly occurrences, and upcoming class views."
-      currentPath="/timetable"
-    >
-      <LoadingCard
-        title="Loading timetable"
-        description="Weekly and upcoming timetable views are being calculated before the route becomes interactive."
-      />
-    </AppShell>
+    <div className="space-y-4 pb-4">
+      <Skeleton className="h-6 w-32" />
+      <SkeletonCard className="h-48" />
+    </div>
   );
 }

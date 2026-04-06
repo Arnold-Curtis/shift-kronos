@@ -1,9 +1,8 @@
 export const appMetadata = {
-  name: "Shift:Kronos",
+  name: "Kronos",
   shortName: "Kronos",
   description:
-    "A personal AI-powered reminder, timetable, notes, and memory system built around reliable Telegram delivery.",
-  phase: "Phase 7: Polishing and Operational Hardening",
-  themeColor: "#09090b",
-  backgroundColor: "#09090b",
+    "Your personal life command center — reminders, schedules, and AI-assisted capture in one place.",
+  themeColor: "#0A0A0F",
+  backgroundColor: "#0A0A0F",
 };

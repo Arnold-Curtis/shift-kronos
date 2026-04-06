@@ -1,36 +1,50 @@
-import { SectionCard } from "@/components/dashboard/section-card";
-import { ReminderBadge } from "@/components/reminders/reminder-badge";
-import { ReminderViewModel } from "@/lib/reminders/types";
+import { GlassCard } from "@/components/ui/glass-card";
+import { TimeLabel } from "@/components/ui/time-label";
+import { AlertTriangle } from "lucide-react";
 
-type FocusPanelProps = {
+type FocusPanelReminder = {
+  id: string;
   title: string;
-  description: string;
-  reminders: ReminderViewModel[];
-  emptyState: string;
+  dueAt: Date | null;
+  description: string | null;
 };
 
-export function FocusPanel({ title, description, reminders, emptyState }: FocusPanelProps) {
+type FocusPanelProps = {
+  reminders: FocusPanelReminder[];
+};
+
+export function FocusPanel({ reminders }: FocusPanelProps) {
+  if (reminders.length === 0) return null;
+
   return (
-    <SectionCard title={title} description={description}>
-      {reminders.length === 0 ? (
-        <p className="rounded-2xl border border-dashed border-border px-4 py-4 text-sm leading-6 text-foreground-muted">
-          {emptyState}
-        </p>
-      ) : (
-        <div className="space-y-3">
-          {reminders.map((reminder) => (
-            <article key={reminder.id} className="rounded-2xl border border-border bg-black/10 px-4 py-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h3 className="text-base font-semibold text-foreground">{reminder.title}</h3>
-                  {reminder.description ? <p className="mt-1 text-sm leading-6 text-foreground-muted">{reminder.description}</p> : null}
-                </div>
-                <ReminderBadge priority={reminder.priority} label={reminder.priority} />
+    <div className="space-y-2 animate-fade-in">
+      <h2 className="flex items-center gap-2 px-1 text-xs font-semibold uppercase tracking-widest text-text-tertiary">
+        <AlertTriangle size={12} className="text-danger" />
+        High Priority
+      </h2>
+      <div className="space-y-2">
+        {reminders.map((reminder) => (
+          <GlassCard key={reminder.id} variant="interactive">
+            <div className="flex items-center gap-3">
+              <div className="h-2.5 w-2.5 shrink-0 rounded-full bg-danger" />
+              <div className="min-w-0 flex-1">
+                <h3 className="text-sm font-semibold text-text-primary truncate">
+                  {reminder.title}
+                </h3>
+                {reminder.description && (
+                  <p className="mt-0.5 text-xs text-text-tertiary truncate">
+                    {reminder.description}
+                  </p>
+                )}
               </div>
-            </article>
-          ))}
-        </div>
-      )}
-    </SectionCard>
+              <TimeLabel
+                date={reminder.dueAt}
+                className="shrink-0 text-xs font-medium text-danger"
+              />
+            </div>
+          </GlassCard>
+        ))}
+      </div>
+    </div>
   );
 }

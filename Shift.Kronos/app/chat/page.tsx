@@ -1,5 +1,4 @@
 import { ChatPanel } from "@/components/assistant/chat-panel";
-import { AppShell } from "@/components/layout/app-shell";
 import { requireCurrentUser } from "@/lib/current-user";
 import { getConversation, listRecentConversations } from "@/lib/assistant/conversations";
 
@@ -19,13 +18,11 @@ export default async function ChatPage({
     : null;
 
   return (
-    <AppShell
-      title="Grounded assistant interaction"
-      eyebrow="Phase 7"
-      description="The assistant now works with schedule context, retrieval-backed knowledge, and persistent memory continuity through one shared server-side workflow used by web, Telegram, and voice inputs."
-      currentPath="/chat"
-    >
-      <ChatPanel conversations={conversations} selectedConversationId={selectedConversation?.id} />
-    </AppShell>
+    <div className="pb-4">
+      <ChatPanel
+        conversations={conversations}
+        selectedConversationId={selectedConversation?.id}
+      />
+    </div>
   );
 }
