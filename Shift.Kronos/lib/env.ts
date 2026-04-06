@@ -34,6 +34,30 @@ export type ServerEnv = z.infer<typeof serverEnvSchema>;
 
 type EnvSource = Record<string, string | undefined>;
 
+function withPreviewFallbacks(env: EnvSource): EnvSource {
+  if (env.VERCEL_ENV !== "preview") {
+    return env;
+  }
+
+  return {
+    ...env,
+    CLERK_SECRET_KEY: env.CLERK_SECRET_KEY ?? "preview-clerk-secret",
+    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:
+      env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? "pk_test_preview",
+    NEXT_PUBLIC_APP_URL: env.NEXT_PUBLIC_APP_URL ?? "https://shift-kronos-preview.vercel.app",
+    BLOB_READ_WRITE_TOKEN: env.BLOB_READ_WRITE_TOKEN ?? "preview-blob-token",
+    TELEGRAM_BOT_TOKEN: env.TELEGRAM_BOT_TOKEN ?? "preview-telegram-token",
+    GEMINI_API_KEY: env.GEMINI_API_KEY ?? "preview-gemini-key",
+    GROQ_API_KEY: env.GROQ_API_KEY ?? "preview-groq-key",
+    OPENROUTER_API_KEY: env.OPENROUTER_API_KEY ?? "preview-openrouter-key",
+    PHASE4_FAKE_AI: env.PHASE4_FAKE_AI ?? "1",
+    PHASE6_FAKE_SUMMARIES: env.PHASE6_FAKE_SUMMARIES ?? "1",
+    PHASE7_CRON_SECRET: env.PHASE7_CRON_SECRET ?? "preview-cron-secret",
+    PHASE7_TELEGRAM_WEBHOOK_SECRET:
+      env.PHASE7_TELEGRAM_WEBHOOK_SECRET ?? "preview-webhook-secret",
+  };
+}
+
 export function parseServerEnv(env: EnvSource): ServerEnv {
   return serverEnvSchema.parse({
     DATABASE_URL: env.DATABASE_URL,
@@ -68,7 +92,7 @@ let cachedEnv: ServerEnv | null = null;
 
 export function getServerEnv() {
   if (!cachedEnv) {
-    cachedEnv = parseServerEnv(process.env as EnvSource);
+    cachedEnv = parseServerEnv(withPreviewFallbacks(process.env as EnvSource));
   }
 
   return cachedEnv;

@@ -31,6 +31,13 @@ export async function transcribeAudioInput(args: {
   }
 
   const env = getServerEnv();
+
+  if (process.env.VERCEL_ENV === "preview" && !env.GROQ_API_KEY) {
+    return {
+      transcript: "Preview voice note. Transcription provider is not configured in this preview environment.",
+    };
+  }
+
   const body = new FormData();
   body.set("file", args.input.file);
   body.set("model", args.model);
