@@ -15,6 +15,7 @@ export function QuickCaptureForm() {
         <textarea
           name="input"
           rows={4}
+          required
           placeholder="Remind me to submit the assignment tomorrow at 8pm"
           className="w-full rounded-2xl border border-border bg-black/10 px-4 py-3 text-foreground outline-none"
         />
@@ -37,6 +38,7 @@ export function QuickCaptureForm() {
         <textarea
           name="transcript"
           rows={4}
+          required
           placeholder="Simulated transcript: remind me to revise operating systems tonight"
           className="w-full rounded-2xl border border-border bg-black/10 px-4 py-3 text-foreground outline-none"
         />

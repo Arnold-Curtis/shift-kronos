@@ -68,6 +68,7 @@ export function ChatPanel({ conversations }: ChatPanelProps) {
           <textarea
             name="message"
             rows={4}
+            required
             placeholder="Ask about your schedule or create a reminder"
             className="w-full rounded-2xl border border-border bg-black/10 px-4 py-3 text-foreground outline-none"
           />

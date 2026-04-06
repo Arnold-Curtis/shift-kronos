@@ -8,10 +8,16 @@ import { ASSISTANT_INPUT_SOURCE } from "@/lib/assistant/types";
 
 export async function submitChatMessageAction(formData: FormData) {
   const user = await requireCurrentUser();
-  const values = assistantChatInputSchema.parse({
+  const result = assistantChatInputSchema.safeParse({
     message: String(formData.get("message") ?? ""),
     conversationId: String(formData.get("conversationId") ?? "") || undefined,
   });
+
+  if (!result.success) {
+    return;
+  }
+
+  const values = result.data;
 
   await runAssistantWorkflow({
     userId: user.id,
@@ -27,9 +33,15 @@ export async function submitChatMessageAction(formData: FormData) {
 
 export async function submitQuickCaptureAction(formData: FormData) {
   const user = await requireCurrentUser();
-  const values = assistantQuickCaptureSchema.parse({
+  const result = assistantQuickCaptureSchema.safeParse({
     input: String(formData.get("input") ?? ""),
   });
+
+  if (!result.success) {
+    return;
+  }
+
+  const values = result.data;
 
   await runAssistantWorkflow({
     userId: user.id,
@@ -44,9 +56,15 @@ export async function submitQuickCaptureAction(formData: FormData) {
 
 export async function submitVoiceCaptureAction(formData: FormData) {
   const user = await requireCurrentUser();
-  const values = assistantVoiceInputSchema.parse({
+  const result = assistantVoiceInputSchema.safeParse({
     transcript: String(formData.get("transcript") ?? ""),
   });
+
+  if (!result.success) {
+    return;
+  }
+
+  const values = result.data;
 
   await runVoiceAssistantWorkflow(user.id, values.transcript);
 
