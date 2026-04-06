@@ -9,7 +9,7 @@ export const TRANSCRIPTION_PROVIDER = {
 } as const;
 
 export const DEFAULT_ASSISTANT_MODEL_BY_PROVIDER = {
-  [ASSISTANT_PROVIDER.OPENROUTER]: "qwen/qwen3.6-plus:free",
+  [ASSISTANT_PROVIDER.OPENROUTER]: "qwen/qwen3-next-80b-a3b-instruct",
 } as const;
 
 export const DEFAULT_TRANSCRIPTION_MODEL_BY_PROVIDER = {
@@ -87,9 +87,11 @@ export function getAssistantProviderOptions() {
       description: "Use OpenRouter as the assistant backend and choose the chat model you want to run.",
       defaultModel: DEFAULT_ASSISTANT_MODEL_BY_PROVIDER[ASSISTANT_PROVIDER.OPENROUTER],
       suggestedModels: [
-        "qwen/qwen3.6-plus:free",
+        "qwen/qwen3-next-80b-a3b-instruct",
         "qwen/qwen-plus-2025-07-28",
-        "qwen/qwen-plus-2025-07-28:thinking",
+        "qwen/qwen3-max",
+        "qwen/qwen3-30b-a3b-instruct-2507",
+        "qwen/qwen3-next-80b-a3b-instruct:free",
       ],
     },
   ];

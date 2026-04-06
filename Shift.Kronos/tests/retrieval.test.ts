@@ -58,10 +58,10 @@ describe("embedding provider", () => {
 
 describe("assistant model normalization", () => {
   it("falls back to the OpenRouter default when a legacy Groq model is still saved", () => {
-    expect(normalizeAssistantModelForProvider("openrouter", "llama-3.3-70b-versatile")).toBe("qwen/qwen3.6-plus:free");
+    expect(normalizeAssistantModelForProvider("openrouter", "llama-3.3-70b-versatile")).toBe("qwen/qwen3-next-80b-a3b-instruct");
   });
 
   it("keeps valid OpenRouter model ids intact", () => {
-    expect(normalizeAssistantModelForProvider("openrouter", "qwen/qwen3.6-plus:free")).toBe("qwen/qwen3.6-plus:free");
+    expect(normalizeAssistantModelForProvider("openrouter", "qwen/qwen3-next-80b-a3b-instruct")).toBe("qwen/qwen3-next-80b-a3b-instruct");
   });
 });

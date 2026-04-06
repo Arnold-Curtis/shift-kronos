@@ -65,7 +65,7 @@ describe("export service", () => {
       timezone: "Africa/Lagos",
       displayName: "Shift User",
       assistantProvider: "openrouter",
-      assistantModel: "qwen/qwen3.6-plus:free",
+      assistantModel: "qwen/qwen3-next-80b-a3b-instruct",
       transcriptionProvider: "groq",
       transcriptionModel: "whisper-large-v3",
       createdAt: baseDate,
