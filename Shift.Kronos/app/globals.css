@@ -1,0 +1,78 @@
+@import "tailwindcss";
+
+:root {
+  --background: #09090b;
+  --background-muted: #111217;
+  --panel: rgba(17, 18, 23, 0.82);
+  --panel-strong: rgba(24, 26, 33, 0.92);
+  --border: rgba(255, 255, 255, 0.08);
+  --foreground: #f5f7fb;
+  --foreground-muted: #b0b7c3;
+  --accent: #8b5cf6;
+  --accent-soft: rgba(139, 92, 246, 0.18);
+  --success: #34d399;
+  --warning: #f59e0b;
+  --danger: #f87171;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-background-muted: var(--background-muted);
+  --color-panel: var(--panel);
+  --color-panel-strong: var(--panel-strong);
+  --color-border: var(--border);
+  --color-foreground: var(--foreground);
+  --color-foreground-muted: var(--foreground-muted);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-height: 100%;
+  background:
+    radial-gradient(circle at top, rgba(139, 92, 246, 0.2), transparent 28%),
+    linear-gradient(180deg, #07070a 0%, #0a0b11 100%);
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  background: transparent;
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+button,
+select,
+input,
+textarea {
+  min-height: 44px;
+}
+
+textarea {
+  resize: vertical;
+}
+
+::selection {
+  background: rgba(139, 92, 246, 0.35);
+  color: var(--foreground);
+}
