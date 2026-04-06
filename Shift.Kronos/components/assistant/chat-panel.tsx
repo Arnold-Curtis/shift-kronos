@@ -1,5 +1,4 @@
-import { submitChatMessageAction } from "@/app/chat/actions";
-import { SubmitButton } from "@/components/forms/submit-button";
+import { ChatComposer } from "@/components/assistant/chat-composer";
 import { ConversationView } from "@/lib/assistant/types";
 
 type ChatPanelProps = {
@@ -65,21 +64,7 @@ export function ChatPanel({ conversations, selectedConversationId }: ChatPanelPr
           )}
         </div>
 
-        <form action={submitChatMessageAction} className="mt-4 grid gap-3">
-          <input type="hidden" name="conversationId" value={activeConversation?.id ?? ""} />
-          <textarea
-            name="message"
-            rows={4}
-            required
-            placeholder="Ask about your schedule or create a reminder"
-            className="w-full rounded-2xl border border-border bg-black/10 px-4 py-3 text-foreground outline-none"
-          />
-          <SubmitButton
-            idleLabel="Send to assistant"
-            pendingLabel="Sending"
-            className="w-full rounded-2xl bg-accent px-4 py-3 text-sm font-semibold text-white transition hover:bg-violet-500 sm:w-auto"
-          />
-        </form>
+        <ChatComposer conversationId={activeConversation?.id} />
       </section>
     </div>
   );

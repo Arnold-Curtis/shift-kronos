@@ -1,14 +1,16 @@
 "use server";
 
-import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireCurrentUser } from "@/lib/current-user";
 import { assistantChatInputSchema, assistantQuickCaptureSchema, assistantVoiceInputSchema } from "@/lib/assistant/schemas";
 import { runAssistantWorkflow, runVoiceAssistantWorkflow } from "@/lib/assistant/service";
 import { ASSISTANT_INPUT_SOURCE } from "@/lib/assistant/types";
-import { AssistantActionState } from "@/app/chat/action-state";
+import { AssistantActionState, INITIAL_ASSISTANT_ACTION_STATE } from "@/app/chat/action-state";
 
-export async function submitChatMessageAction(formData: FormData) {
+export async function submitChatMessageAction(
+  _previousState: AssistantActionState = INITIAL_ASSISTANT_ACTION_STATE,
+  formData: FormData,
+): Promise<AssistantActionState> {
   const user = await requireCurrentUser();
   const result = assistantChatInputSchema.safeParse({
     message: String(formData.get("message") ?? ""),
@@ -16,7 +18,10 @@ export async function submitChatMessageAction(formData: FormData) {
   });
 
   if (!result.success) {
-    return;
+    return {
+      status: "error",
+      message: "Enter a valid chat message before sending it to the assistant.",
+    };
   }
 
   const values = result.data;
@@ -32,7 +37,12 @@ export async function submitChatMessageAction(formData: FormData) {
   revalidatePath("/");
   revalidatePath("/reminders");
 
-  redirect(`/chat?conversationId=${workflowResult.conversationId ?? values.conversationId ?? ""}`);
+  return {
+    status: "success",
+    kind: workflowResult.kind,
+    message: workflowResult.message,
+    conversationId: workflowResult.conversationId ?? values.conversationId,
+  };
 }
 
 export async function submitQuickCaptureAction(
