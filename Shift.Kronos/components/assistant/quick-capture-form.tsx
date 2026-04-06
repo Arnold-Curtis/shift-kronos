@@ -1,6 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import Link from "next/link";
+import { useActionState, useState, useTransition } from "react";
+import { INITIAL_ASSISTANT_ACTION_STATE } from "@/app/chat/action-state";
 import { submitQuickCaptureAction, submitVoiceCaptureAction } from "@/app/chat/actions";
 import { SubmitButton } from "@/components/forms/submit-button";
 
@@ -11,6 +13,14 @@ export function QuickCaptureForm() {
   const [isPending, startTransition] = useTransition();
   const [recorder, setRecorder] = useState<MediaRecorder | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
+  const [quickCaptureState, quickCaptureAction] = useActionState(
+    submitQuickCaptureAction,
+    INITIAL_ASSISTANT_ACTION_STATE,
+  );
+  const [voiceCaptureState, voiceCaptureAction] = useActionState(
+    submitVoiceCaptureAction,
+    INITIAL_ASSISTANT_ACTION_STATE,
+  );
 
   async function startRecording() {
     if (!navigator.mediaDevices?.getUserMedia) {
@@ -53,11 +63,11 @@ export function QuickCaptureForm() {
               return;
             }
 
-            const result = (await response.json()) as { transcript?: string };
+            const result = (await response.json()) as { transcript?: string; message?: string };
 
             if (result.transcript) {
               setTranscript(result.transcript);
-              setAudioStatus("Audio transcribed and sent through the assistant workflow.");
+              setAudioStatus(result.message ?? "Audio transcribed and sent through the assistant workflow.");
             } else {
               setAudioStatus("Audio capture finished, but transcription did not return text.");
             }
@@ -85,7 +95,7 @@ export function QuickCaptureForm() {
 
   return (
     <div className="grid gap-4 xl:grid-cols-2">
-      <form action={submitQuickCaptureAction} className="grid gap-3 rounded-3xl border border-border bg-panel px-5 py-5">
+      <form action={quickCaptureAction} className="grid gap-3 rounded-3xl border border-border bg-panel px-5 py-5">
         <div className="space-y-2">
           <p className="text-sm font-semibold text-foreground">Natural-language quick capture</p>
           <p className="text-sm leading-6 text-foreground-muted">
@@ -106,6 +116,31 @@ export function QuickCaptureForm() {
           pendingLabel="Capturing"
           className="w-full rounded-2xl bg-accent px-4 py-3 text-sm font-semibold text-white transition hover:bg-violet-500 sm:w-auto"
         />
+
+        {quickCaptureState.status !== "idle" ? (
+          <div className="rounded-2xl border border-border bg-black/10 px-4 py-3 text-sm leading-6 text-foreground-muted">
+            <p className="font-semibold text-foreground">
+              {quickCaptureState.status === "success" ? "Assistant result" : "Capture error"}
+            </p>
+            <p className="mt-2">{quickCaptureState.message}</p>
+            {quickCaptureState.status === "success" ? (
+              <div className="mt-3 flex flex-wrap gap-3">
+                <Link
+                  href="/reminders"
+                  className="inline-flex rounded-2xl border border-border px-3 py-2 text-xs font-semibold text-foreground transition hover:bg-white/5"
+                >
+                  Open reminders
+                </Link>
+                <Link
+                  href="/chat"
+                  className="inline-flex rounded-2xl border border-border px-3 py-2 text-xs font-semibold text-foreground transition hover:bg-white/5"
+                >
+                  Open assistant chat
+                </Link>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </form>
 
       <div className="grid gap-3 rounded-3xl border border-border bg-panel px-5 py-5">
@@ -133,7 +168,7 @@ export function QuickCaptureForm() {
           </p>
         ) : null}
 
-        <form action={submitVoiceCaptureAction} className="grid gap-3">
+        <form action={voiceCaptureAction} className="grid gap-3">
           <textarea
             name="transcript"
             rows={4}
@@ -148,6 +183,31 @@ export function QuickCaptureForm() {
             pendingLabel="Running transcript workflow"
             className="w-full rounded-2xl border border-border bg-black/10 px-4 py-3 text-sm font-semibold text-foreground transition hover:bg-white/5 sm:w-auto"
           />
+
+          {voiceCaptureState.status !== "idle" ? (
+            <div className="rounded-2xl border border-border bg-black/10 px-4 py-3 text-sm leading-6 text-foreground-muted">
+              <p className="font-semibold text-foreground">
+                {voiceCaptureState.status === "success" ? "Transcript workflow result" : "Transcript workflow error"}
+              </p>
+              <p className="mt-2">{voiceCaptureState.message}</p>
+              {voiceCaptureState.status === "success" ? (
+                <div className="mt-3 flex flex-wrap gap-3">
+                  <Link
+                    href="/reminders"
+                    className="inline-flex rounded-2xl border border-border px-3 py-2 text-xs font-semibold text-foreground transition hover:bg-white/5"
+                  >
+                    Open reminders
+                  </Link>
+                  <Link
+                    href="/chat"
+                    className="inline-flex rounded-2xl border border-border px-3 py-2 text-xs font-semibold text-foreground transition hover:bg-white/5"
+                  >
+                    Open assistant chat
+                  </Link>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
         </form>
       </div>
     </div>
