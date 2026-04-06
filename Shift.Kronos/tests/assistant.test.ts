@@ -88,6 +88,40 @@ describe("assistant heuristic parsing", () => {
     expect(result.reminder.dueAt?.toISOString()).toBe("2026-04-07T07:00:00.000Z");
   });
 
+  it("asks for timetable-specific missing fields instead of reminder intent", () => {
+    const result = parseAssistantIntentHeuristically(
+      "Add a timetable entry for tomorrow at 8 a.m. that I have a business communications class.",
+      context,
+    );
+
+    expect(result.type).toBe(ASSISTANT_ACTION_TYPE.CLARIFY_MISSING_FIELDS);
+
+    if (result.type !== ASSISTANT_ACTION_TYPE.CLARIFY_MISSING_FIELDS) {
+      throw new Error("Expected clarification action.");
+    }
+
+    expect(result.clarification.missingFields).toContain("endTime");
+    expect(result.clarification.question).toContain("class end");
+  });
+
+  it("creates a timetable entry when a strict recurring class request includes required fields", () => {
+    const result = parseAssistantIntentHeuristically(
+      "Add a timetable entry for tomorrow at 8 a.m. to 10 a.m. that I have a business communications class.",
+      context,
+    );
+
+    expect(result.type).toBe(ASSISTANT_ACTION_TYPE.CREATE_TIMETABLE_ENTRY);
+
+    if (result.type !== ASSISTANT_ACTION_TYPE.CREATE_TIMETABLE_ENTRY) {
+      throw new Error("Expected create timetable entry action.");
+    }
+
+    expect(result.timetableEntry.subject).toBe("business communications");
+    expect(result.timetableEntry.dayOfWeek).toBe(2);
+    expect(result.timetableEntry.startTime).toBe("08:00");
+    expect(result.timetableEntry.endTime).toBe("10:00");
+  });
+
   it("requests clarification when reminder timing is missing", () => {
     const result = parseAssistantIntentHeuristically("Remind me to submit the assignment", context);
 

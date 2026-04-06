@@ -21,7 +21,7 @@ const serverEnvSchema = z.object({
   PHASE5_EMBEDDING_DIMENSIONS: z.coerce.number().int().min(1).default(768),
   PHASE5_FAKE_EMBEDDINGS: z.enum(["0", "1"]).optional(),
   PHASE5_FAKE_PDF_EXTRACTION: z.enum(["0", "1"]).optional(),
-  PHASE6_CONTEXT_TOKEN_BUDGET: z.coerce.number().int().min(256).default(2400),
+  PHASE6_CONTEXT_TOKEN_BUDGET: z.coerce.number().int().min(256).default(12000),
   PHASE6_RECENT_MESSAGE_LIMIT: z.coerce.number().int().min(2).default(6),
   PHASE6_SUMMARY_MIN_MESSAGES: z.coerce.number().int().min(2).default(6),
   PHASE6_SUMMARY_TRIGGER_TOKENS: z.coerce.number().int().min(50).default(180),

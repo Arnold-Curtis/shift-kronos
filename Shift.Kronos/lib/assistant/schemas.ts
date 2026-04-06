@@ -2,6 +2,8 @@ import { ReminderPriority, ReminderType, RecurrenceFrequency } from "@prisma/cli
 import { z } from "zod";
 import { ASSISTANT_ACTION_TYPE } from "@/lib/assistant/types";
 
+const timeSchema = z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/);
+
 const reminderDraftSchema = z.object({
   title: z.string().trim().min(1).max(160),
   description: z.string().trim().max(2000).optional(),
@@ -20,11 +22,28 @@ const reminderDraftSchema = z.object({
     .optional(),
 });
 
+const timetableDraftSchema = z.object({
+  subject: z.string().trim().min(1).max(160),
+  location: z.string().trim().max(160).optional(),
+  lecturer: z.string().trim().max(160).optional(),
+  dayOfWeek: z.number().int().min(1).max(7).optional(),
+  startTime: timeSchema.optional(),
+  endTime: timeSchema.optional(),
+  semesterStart: z.coerce.date().optional(),
+  semesterEnd: z.coerce.date().optional(),
+  reminderLeadMinutes: z.number().int().min(0).max(1440).optional(),
+});
+
 export const assistantParseResultSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal(ASSISTANT_ACTION_TYPE.CREATE_REMINDER),
     confidence: z.enum(["high", "medium"]),
     reminder: reminderDraftSchema,
+  }),
+  z.object({
+    type: z.literal(ASSISTANT_ACTION_TYPE.CREATE_TIMETABLE_ENTRY),
+    confidence: z.enum(["high", "medium"]),
+    timetableEntry: timetableDraftSchema,
   }),
   z.object({
     type: z.literal(ASSISTANT_ACTION_TYPE.ANSWER_QUESTION),

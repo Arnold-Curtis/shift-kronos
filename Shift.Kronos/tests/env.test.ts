@@ -20,7 +20,7 @@ const validEnv = {
   PHASE5_EMBEDDING_DIMENSIONS: "768",
   PHASE5_FAKE_EMBEDDINGS: "1",
   PHASE5_FAKE_PDF_EXTRACTION: "1",
-  PHASE6_CONTEXT_TOKEN_BUDGET: "2400",
+  PHASE6_CONTEXT_TOKEN_BUDGET: "12000",
   PHASE6_RECENT_MESSAGE_LIMIT: "6",
   PHASE6_SUMMARY_MIN_MESSAGES: "6",
   PHASE6_SUMMARY_TRIGGER_TOKENS: "180",
@@ -34,7 +34,7 @@ describe("parseServerEnv", () => {
     expect(parseServerEnv(validEnv)).toMatchObject({
       ...validEnv,
       PHASE5_EMBEDDING_DIMENSIONS: 768,
-      PHASE6_CONTEXT_TOKEN_BUDGET: 2400,
+      PHASE6_CONTEXT_TOKEN_BUDGET: 12000,
       PHASE6_RECENT_MESSAGE_LIMIT: 6,
       PHASE6_SUMMARY_MIN_MESSAGES: 6,
       PHASE6_SUMMARY_TRIGGER_TOKENS: 180,
@@ -81,7 +81,7 @@ describe("parseServerEnv", () => {
   it("parses the Phase 6 memory environment contract", () => {
     const result = parseServerEnv(validEnv);
 
-    expect(result.PHASE6_CONTEXT_TOKEN_BUDGET).toBe(2400);
+    expect(result.PHASE6_CONTEXT_TOKEN_BUDGET).toBe(12000);
     expect(result.PHASE6_RECENT_MESSAGE_LIMIT).toBe(6);
     expect(result.PHASE6_SUMMARY_MIN_MESSAGES).toBe(6);
     expect(result.PHASE6_SUMMARY_TRIGGER_TOKENS).toBe(180);

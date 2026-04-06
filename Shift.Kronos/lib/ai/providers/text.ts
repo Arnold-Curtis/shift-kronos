@@ -102,8 +102,10 @@ function buildAssistantSystemPrompt() {
     "Return only valid JSON matching the requested schema.",
     "Do not wrap the JSON in markdown, code fences, or commentary.",
     "You must stay deterministic at the mutation boundary.",
-    "Create reminders only when the user intent is clear enough.",
-    "If timing or title is missing, ask a clarification question instead of inventing details.",
+    "Create reminders or timetable entries only when the user intent is clear enough.",
+    "If required fields are missing, ask a clarification question instead of inventing details.",
+    "Timetable entries are recurring semester classes, not one-time reminders.",
+    "Never invent timetable end times or semester bounds when the user has not provided them.",
     "If the user asks about schedule, notes, files, or memory, answer grounded only in provided context.",
     "Never mention provider details or reasoning steps.",
   ].join(" ");
@@ -309,6 +311,22 @@ function getAssistantActionSchema(): JsonSchemaDefinition {
           },
           required: ["title", "type", "priority", "tags"],
         },
+        timetableEntry: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            subject: { type: "string" },
+            location: { type: "string" },
+            lecturer: { type: "string" },
+            dayOfWeek: { type: "number" },
+            startTime: { type: "string" },
+            endTime: { type: "string" },
+            semesterStart: { type: "string" },
+            semesterEnd: { type: "string" },
+            reminderLeadMinutes: { type: "number" },
+          },
+          required: ["subject"],
+        },
         answer: {
           type: "object",
           additionalProperties: false,
@@ -498,6 +516,35 @@ function normalizeAssistantAction(output: unknown): AssistantAction {
       answer: {
         summary: String(answer?.summary ?? ""),
         evidence: Array.isArray(answer?.evidence) ? answer.evidence.map((item) => String(item)) : [],
+      },
+    };
+  }
+
+  if (value.type === ASSISTANT_ACTION_TYPE.CREATE_TIMETABLE_ENTRY) {
+    const timetableEntry = value.timetableEntry as Record<string, unknown> | undefined;
+
+    return {
+      type: ASSISTANT_ACTION_TYPE.CREATE_TIMETABLE_ENTRY,
+      confidence: value.confidence === "medium" ? "medium" : "high",
+      timetableEntry: {
+        subject: String(timetableEntry?.subject ?? ""),
+        location: typeof timetableEntry?.location === "string" ? timetableEntry.location : undefined,
+        lecturer: typeof timetableEntry?.lecturer === "string" ? timetableEntry.lecturer : undefined,
+        dayOfWeek: typeof timetableEntry?.dayOfWeek === "number" ? Number(timetableEntry.dayOfWeek) : undefined,
+        startTime: typeof timetableEntry?.startTime === "string" ? timetableEntry.startTime : undefined,
+        endTime: typeof timetableEntry?.endTime === "string" ? timetableEntry.endTime : undefined,
+        semesterStart:
+          typeof timetableEntry?.semesterStart === "string" && timetableEntry.semesterStart
+            ? new Date(timetableEntry.semesterStart)
+            : undefined,
+        semesterEnd:
+          typeof timetableEntry?.semesterEnd === "string" && timetableEntry.semesterEnd
+            ? new Date(timetableEntry.semesterEnd)
+            : undefined,
+        reminderLeadMinutes:
+          typeof timetableEntry?.reminderLeadMinutes === "number"
+            ? Number(timetableEntry.reminderLeadMinutes)
+            : undefined,
       },
     };
   }
