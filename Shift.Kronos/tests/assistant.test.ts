@@ -90,6 +90,22 @@ describe("assistant heuristic parsing", () => {
     expect(result.reminder.dueAt?.toISOString()).toBe("2026-04-07T07:00:00.000Z");
   });
 
+  it("parses explicit reminder times without relative words and supports spaced minute input", () => {
+    const result = parseAssistantIntentHeuristically(
+      "set a reminder for 10 51 pm saying testing telegram",
+      context,
+    );
+
+    expect(result.type).toBe(ASSISTANT_ACTION_TYPE.CREATE_REMINDER);
+
+    if (result.type !== ASSISTANT_ACTION_TYPE.CREATE_REMINDER) {
+      throw new Error("Expected create reminder action.");
+    }
+
+    expect(result.reminder.title).toBe("testing telegram");
+    expect(result.reminder.dueAt?.toISOString()).toBe("2026-04-06T22:51:00.000Z");
+  });
+
   it("asks for timetable-specific missing fields instead of reminder intent", () => {
     const result = parseAssistantIntentHeuristically(
       "Add a timetable entry for tomorrow at 8 a.m. that I have a business communications class.",

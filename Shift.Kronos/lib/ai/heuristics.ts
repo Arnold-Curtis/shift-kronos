@@ -18,7 +18,7 @@ function normalizeInput(input: string) {
 }
 
 function parseExplicitTime(lower: string) {
-  const match = lower.match(/\b(?:at\s+)?(1[0-2]|0?[1-9])(?::([0-5]\d))?\s*(a\.?m\.?|p\.?m\.?)\b/i);
+  const match = lower.match(/\b(?:at\s+)?(1[0-2]|0?[1-9])(?:(?::|\s)([0-5]\d))?\s*(a\.?m\.?|p\.?m\.?)\b/i);
 
   if (!match) {
     return null;
@@ -33,6 +33,28 @@ function parseExplicitTime(lower: string) {
     hour: meridiem === "pm" ? normalizedHour + 12 : normalizedHour,
     minute,
   };
+}
+
+function parseDefaultExplicitDueAt(input: string, now: Date) {
+  const explicitTime = parseExplicitTime(input.toLowerCase());
+
+  if (!explicitTime) {
+    return null;
+  }
+
+  const todayAtTime = new Date(Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate(),
+    explicitTime.hour,
+    explicitTime.minute,
+    0,
+    0,
+  ));
+
+  return todayAtTime.getTime() >= now.getTime()
+    ? todayAtTime
+    : toDateAtHour(now, 1, explicitTime.hour, explicitTime.minute);
 }
 
 function toDateAtHour(base: Date, dayOffset: number, hour: number, minute: number) {
@@ -68,7 +90,7 @@ function parseRelativeDueAt(input: string, now: Date) {
     return addHours(now, 1);
   }
 
-  return null;
+  return parseDefaultExplicitDueAt(input, now);
 }
 
 function parseWeekdayReminder(input: string, now: Date) {
@@ -151,6 +173,7 @@ function extractTitle(input: string) {
     .replace(/^set reminder to\s+/i, "")
     .replace(/^set reminder for\s+/i, "")
     .replace(/^quick add\s+/i, "")
+    .replace(/^(?:at\s+)?\d{1,2}(?:(?::|\s)\d{2})?\s*(?:am|pm)\s+(?:saying|to|that i should)\s+/i, "")
     .replace(/^tomorrow\s+(?:at\s+)?\d{1,2}(?::\d{2})?\s*(?:am|pm)\s+(?:that\s+i\s+should|to)\s+/i, "")
     .replace(/^tomorrow\s+(?:that\s+i\s+should|to)\s+/i, "")
     .replace(/^tonight\s+(?:at\s+)?\d{1,2}(?::\d{2})?\s*(?:am|pm)\s+(?:that\s+i\s+should|to)\s+/i, "")
@@ -159,6 +182,7 @@ function extractTitle(input: string) {
     .replace(/^this evening\s+(?:that\s+i\s+should|to)\s+/i, "")
     .replace(/\b(?:tomorrow|tonight|this evening)\b.*?\bthat i should\b\s*/i, "")
     .replace(/\b(?:tomorrow|tonight|this evening)\b.*?\bto\b\s*/i, "")
+    .replace(/\b(?:saying|that says|saying that)\b\s*/i, "")
     .replace(/^that i should\s+/i, "")
     .replace(/^to\s+/i, "")
     .replace(/[.?!]+$/, "")
