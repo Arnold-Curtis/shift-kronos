@@ -3,6 +3,11 @@ import { User } from "@prisma/client";
 import { db } from "@/lib/db";
 
 const DEFAULT_TIMEZONE = "Africa/Lagos";
+const PREVIEW_DEMO_CLERK_ID = "preview-demo-user";
+
+function hasClerkConfig() {
+  return Boolean(process.env.CLERK_SECRET_KEY && process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
+}
 
 function getPreferredDisplayName(user: Awaited<ReturnType<typeof currentUser>>) {
   if (!user) {
@@ -15,6 +20,20 @@ function getPreferredDisplayName(user: Awaited<ReturnType<typeof currentUser>>) 
 }
 
 export async function requireCurrentUser(): Promise<User> {
+  if (!hasClerkConfig()) {
+    return db.user.upsert({
+      where: {
+        clerkUserId: PREVIEW_DEMO_CLERK_ID,
+      },
+      update: {},
+      create: {
+        clerkUserId: PREVIEW_DEMO_CLERK_ID,
+        displayName: "Preview User",
+        timezone: DEFAULT_TIMEZONE,
+      },
+    });
+  }
+
   const session = await auth();
 
   if (!session.userId) {
@@ -43,6 +62,14 @@ export async function requireCurrentUser(): Promise<User> {
 }
 
 export async function getCurrentUser() {
+  if (!hasClerkConfig()) {
+    return db.user.findUnique({
+      where: {
+        clerkUserId: PREVIEW_DEMO_CLERK_ID,
+      },
+    });
+  }
+
   const session = await auth();
 
   if (!session.userId) {

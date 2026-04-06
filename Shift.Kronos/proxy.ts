@@ -1,3 +1,4 @@
+import { NextResponse } from "next/server";
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
 const isProtectedRoute = createRouteMatcher([
@@ -10,11 +11,19 @@ const isProtectedRoute = createRouteMatcher([
   "/settings(.*)",
 ]);
 
-export default clerkMiddleware(async (auth, req) => {
+const hasClerkSecretKey = Boolean(process.env.CLERK_SECRET_KEY);
+
+const clerkProxy = clerkMiddleware(async (auth, req) => {
   if (isProtectedRoute(req)) {
     await auth.protect();
   }
 });
+
+export default hasClerkSecretKey
+  ? clerkProxy
+  : function proxy() {
+      return NextResponse.next();
+    };
 
 export const config = {
   matcher: [
