@@ -6,6 +6,24 @@ function normalizeInput(input: string) {
   return input.trim().replace(/\s+/g, " ");
 }
 
+function parseExplicitTime(lower: string) {
+  const match = lower.match(/\b(?:at\s+)?(1[0-2]|0?[1-9])(?::([0-5]\d))?\s*(am|pm)\b/i);
+
+  if (!match) {
+    return null;
+  }
+
+  const rawHour = Number(match[1]);
+  const minute = Number(match[2] ?? "0");
+  const meridiem = match[3].toLowerCase();
+  const normalizedHour = rawHour % 12;
+
+  return {
+    hour: meridiem === "pm" ? normalizedHour + 12 : normalizedHour,
+    minute,
+  };
+}
+
 function toDateAtHour(base: Date, dayOffset: number, hour: number, minute: number) {
   const next = addDays(base, dayOffset);
   return new Date(Date.UTC(
@@ -21,18 +39,18 @@ function toDateAtHour(base: Date, dayOffset: number, hour: number, minute: numbe
 
 function parseRelativeDueAt(input: string, now: Date) {
   const lower = input.toLowerCase();
+  const explicitTime = parseExplicitTime(lower);
 
   if (lower.includes("tomorrow")) {
-    const hour = lower.includes("8pm") ? 20 : lower.includes("6pm") ? 18 : 9;
-    return toDateAtHour(now, 1, hour, 0);
+    return toDateAtHour(now, 1, explicitTime?.hour ?? 9, explicitTime?.minute ?? 0);
   }
 
   if (lower.includes("tonight")) {
-    return toDateAtHour(now, 0, 20, 0);
+    return toDateAtHour(now, 0, explicitTime?.hour ?? 20, explicitTime?.minute ?? 0);
   }
 
   if (lower.includes("this evening")) {
-    return toDateAtHour(now, 0, 18, 0);
+    return toDateAtHour(now, 0, explicitTime?.hour ?? 18, explicitTime?.minute ?? 0);
   }
 
   if (lower.includes("in 1 hour")) {
@@ -79,9 +97,25 @@ function parseWeekdayReminder(input: string, now: Date) {
 function extractTitle(input: string) {
   const cleaned = input
     .replace(/^remind me to\s+/i, "")
+    .replace(/^remind me\s+/i, "")
     .replace(/^add reminder to\s+/i, "")
     .replace(/^create reminder to\s+/i, "")
+    .replace(/^set a reminder to\s+/i, "")
+    .replace(/^set a reminder for\s+/i, "")
+    .replace(/^set reminder to\s+/i, "")
+    .replace(/^set reminder for\s+/i, "")
     .replace(/^quick add\s+/i, "")
+    .replace(/^tomorrow\s+(?:at\s+)?\d{1,2}(?::\d{2})?\s*(?:am|pm)\s+(?:that\s+i\s+should|to)\s+/i, "")
+    .replace(/^tomorrow\s+(?:that\s+i\s+should|to)\s+/i, "")
+    .replace(/^tonight\s+(?:at\s+)?\d{1,2}(?::\d{2})?\s*(?:am|pm)\s+(?:that\s+i\s+should|to)\s+/i, "")
+    .replace(/^tonight\s+(?:that\s+i\s+should|to)\s+/i, "")
+    .replace(/^this evening\s+(?:at\s+)?\d{1,2}(?::\d{2})?\s*(?:am|pm)\s+(?:that\s+i\s+should|to)\s+/i, "")
+    .replace(/^this evening\s+(?:that\s+i\s+should|to)\s+/i, "")
+    .replace(/\b(?:tomorrow|tonight|this evening)\b.*?\bthat i should\b\s*/i, "")
+    .replace(/\b(?:tomorrow|tonight|this evening)\b.*?\bto\b\s*/i, "")
+    .replace(/^that i should\s+/i, "")
+    .replace(/^to\s+/i, "")
+    .replace(/[.?!]+$/, "")
     .trim();
 
   return cleaned.slice(0, 160);
@@ -221,6 +255,8 @@ export function parseAssistantIntentHeuristically(input: string, context: Assist
 
   const looksLikeReminder =
     lower.startsWith("remind me") ||
+    lower.startsWith("set a reminder") ||
+    lower.startsWith("set reminder") ||
     lower.startsWith("add reminder") ||
     lower.startsWith("create reminder") ||
     lower.startsWith("quick add");

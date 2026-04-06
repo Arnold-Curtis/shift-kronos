@@ -72,6 +72,22 @@ describe("assistant heuristic parsing", () => {
     expect(result.reminder.tags).toContain("school");
   });
 
+  it("treats direct set reminder phrasing as a reminder request", () => {
+    const result = parseAssistantIntentHeuristically(
+      "Set a reminder for tomorrow at 7am that I should brush my shoes.",
+      context,
+    );
+
+    expect(result.type).toBe(ASSISTANT_ACTION_TYPE.CREATE_REMINDER);
+
+    if (result.type !== ASSISTANT_ACTION_TYPE.CREATE_REMINDER) {
+      throw new Error("Expected create reminder action.");
+    }
+
+    expect(result.reminder.title).toBe("brush my shoes");
+    expect(result.reminder.dueAt?.toISOString()).toBe("2026-04-07T07:00:00.000Z");
+  });
+
   it("requests clarification when reminder timing is missing", () => {
     const result = parseAssistantIntentHeuristically("Remind me to submit the assignment", context);
 
