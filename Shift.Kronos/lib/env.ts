@@ -17,7 +17,7 @@ const serverEnvSchema = z.object({
   OPENROUTER_HTTP_REFERER: z.string().url("OPENROUTER_HTTP_REFERER must be a valid URL").optional(),
   OPENROUTER_TITLE: z.string().trim().min(1, "OPENROUTER_TITLE must not be empty").optional(),
   PHASE4_FAKE_AI: z.enum(["0", "1"]).optional(),
-  PHASE5_EMBEDDING_MODEL: z.string().min(1, "PHASE5_EMBEDDING_MODEL is required").default("text-embedding-004"),
+  PHASE5_EMBEDDING_MODEL: z.string().min(1, "PHASE5_EMBEDDING_MODEL is required").default("gemini-embedding-001"),
   PHASE5_EMBEDDING_DIMENSIONS: z.coerce.number().int().min(1).default(768),
   PHASE5_FAKE_EMBEDDINGS: z.enum(["0", "1"]).optional(),
   PHASE5_FAKE_PDF_EXTRACTION: z.enum(["0", "1"]).optional(),

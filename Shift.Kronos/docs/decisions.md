@@ -97,7 +97,7 @@ Voice input is required, and the user wants a Groq-based approach in the current
 
 ### Embeddings
 
-Gemini `text-embedding-004` is the current choice.
+Gemini `gemini-embedding-001` is the current choice.
 
 ### Model strategy
 

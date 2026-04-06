@@ -16,7 +16,7 @@ const validEnv = {
   OPENROUTER_HTTP_REFERER: "https://shift-kronos.test",
   OPENROUTER_TITLE: "Shift:Kronos",
   PHASE4_FAKE_AI: "1",
-  PHASE5_EMBEDDING_MODEL: "text-embedding-004",
+  PHASE5_EMBEDDING_MODEL: "gemini-embedding-001",
   PHASE5_EMBEDDING_DIMENSIONS: "768",
   PHASE5_FAKE_EMBEDDINGS: "1",
   PHASE5_FAKE_PDF_EXTRACTION: "1",
@@ -63,7 +63,7 @@ describe("parseServerEnv", () => {
   it("parses the Phase 5 retrieval environment contract", () => {
     const result = parseServerEnv(validEnv);
 
-    expect(result.PHASE5_EMBEDDING_MODEL).toBe("text-embedding-004");
+    expect(result.PHASE5_EMBEDDING_MODEL).toBe("gemini-embedding-001");
     expect(result.PHASE5_EMBEDDING_DIMENSIONS).toBe(768);
     expect(result.PHASE5_FAKE_EMBEDDINGS).toBe("1");
     expect(result.PHASE5_FAKE_PDF_EXTRACTION).toBe("1");

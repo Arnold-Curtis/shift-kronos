@@ -40,7 +40,7 @@ The architecture should preserve a simple rule: deterministic application logic 
 
 - Groq for fast voice transcription workflows
 - per-feature model selection for parsing, suggestions, and other intelligence tasks
-- Gemini `text-embedding-004` for embeddings
+- Gemini `gemini-embedding-001` for embeddings
 - local Ollama support as part of the model strategy where appropriate
 
 ## System Boundaries

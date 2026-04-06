@@ -9,6 +9,7 @@ import {
   ASSISTANT_PROVIDER,
   AssistantProvider,
   DEFAULT_ASSISTANT_MODEL_BY_PROVIDER,
+  getAssistantProviderOptions,
 } from "@/lib/ai/preferences";
 import { memorySummarySchema } from "@/lib/memory/schemas";
 import { logWarn } from "@/lib/observability/logger";
@@ -266,6 +267,14 @@ async function generateStructuredJson(args: {
   });
 }
 
+function getAssistantFallbackModels(primaryModel: string) {
+  const suggested = getAssistantProviderOptions()
+    .flatMap((option) => option.suggestedModels)
+    .filter((model, index, all) => all.indexOf(model) === index);
+
+  return [primaryModel, ...suggested.filter((model) => model !== primaryModel)];
+}
+
 function getAssistantActionSchema(): JsonSchemaDefinition {
   return {
     name: "assistant_action",
@@ -397,36 +406,49 @@ export async function generateStructuredAssistantAction(
 
   const provider = request.provider ?? ASSISTANT_PROVIDER.OPENROUTER;
   const model = request.model ?? DEFAULT_ASSISTANT_MODEL_BY_PROVIDER[provider];
+  const candidateModels = getAssistantFallbackModels(model);
+  let lastError: unknown = null;
 
-  try {
-    const output = await generateStructuredJson({
-      userId: request.userId,
-      provider,
-      model,
-      jsonSchema: getAssistantActionSchema(),
-      messages: [
-        {
-          role: "system",
-          content: buildAssistantSystemPrompt(),
-        },
-        {
-          role: "user",
-          content: buildAssistantUserPrompt(request),
-        },
-      ],
-    });
+  for (const candidateModel of candidateModels) {
+    try {
+      const output = await generateStructuredJson({
+        userId: request.userId,
+        provider,
+        model: candidateModel,
+        jsonSchema: getAssistantActionSchema(),
+        messages: [
+          {
+            role: "system",
+            content: buildAssistantSystemPrompt(),
+          },
+          {
+            role: "user",
+            content: buildAssistantUserPrompt(request),
+          },
+        ],
+      });
 
-    return normalizeAssistantAction(output);
-  } catch (error) {
-    logWarn("assistant.provider.openrouter-fallback", {
-      provider,
-      model,
-      userId: request.userId,
-      error,
-    });
+      return normalizeAssistantAction(output);
+    } catch (error) {
+      lastError = error;
 
-    return parseAssistantIntentHeuristically(request.input, request.context);
+      logWarn("assistant.provider.openrouter-model-attempt-failed", {
+        provider,
+        model: candidateModel,
+        userId: request.userId,
+        error,
+      });
+    }
   }
+
+  logWarn("assistant.provider.openrouter-fallback", {
+    provider,
+    model,
+    userId: request.userId,
+    error: lastError,
+  });
+
+  return parseAssistantIntentHeuristically(request.input, request.context);
 }
 
 export async function generateStructuredMemorySummary(request: StructuredMemorySummaryRequest) {

@@ -1,7 +1,5 @@
 import { getServerEnv } from "@/lib/env";
 
-const DEFAULT_EMBEDDING_MODEL = "text-embedding-004";
-
 export type EmbeddingResult = {
   model: string;
   dimensions: number;
@@ -46,13 +44,15 @@ export async function generateEmbedding(input: string): Promise<EmbeddingResult>
     };
   }
 
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${DEFAULT_EMBEDDING_MODEL}:embedContent?key=${env.GEMINI_API_KEY}`, {
+  const model = env.PHASE5_EMBEDDING_MODEL;
+
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:embedContent?key=${env.GEMINI_API_KEY}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: `models/${DEFAULT_EMBEDDING_MODEL}`,
+      model: `models/${model}`,
       content: {
         parts: [
           {
@@ -76,7 +76,7 @@ export async function generateEmbedding(input: string): Promise<EmbeddingResult>
   const values = assertEmbeddingVector(payload.embedding?.values);
 
   return {
-    model: DEFAULT_EMBEDDING_MODEL,
+    model,
     dimensions: values.length,
     values,
   };
