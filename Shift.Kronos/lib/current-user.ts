@@ -5,8 +5,12 @@ import { db } from "@/lib/db";
 const DEFAULT_TIMEZONE = "Africa/Lagos";
 const PREVIEW_DEMO_CLERK_ID = "preview-demo-user";
 
-function hasClerkConfig() {
-  return Boolean(process.env.CLERK_SECRET_KEY && process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY);
+function shouldBypassClerk() {
+  if (process.env.VERCEL_ENV === "preview") {
+    return true;
+  }
+
+  return !process.env.CLERK_SECRET_KEY || !process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
 }
 
 function getPreferredDisplayName(user: Awaited<ReturnType<typeof currentUser>>) {
@@ -20,7 +24,7 @@ function getPreferredDisplayName(user: Awaited<ReturnType<typeof currentUser>>) 
 }
 
 export async function requireCurrentUser(): Promise<User> {
-  if (!hasClerkConfig()) {
+  if (shouldBypassClerk()) {
     return db.user.upsert({
       where: {
         clerkUserId: PREVIEW_DEMO_CLERK_ID,
@@ -62,7 +66,7 @@ export async function requireCurrentUser(): Promise<User> {
 }
 
 export async function getCurrentUser() {
-  if (!hasClerkConfig()) {
+  if (shouldBypassClerk()) {
     return db.user.findUnique({
       where: {
         clerkUserId: PREVIEW_DEMO_CLERK_ID,

@@ -11,7 +11,8 @@ const isProtectedRoute = createRouteMatcher([
   "/settings(.*)",
 ]);
 
-const hasClerkSecretKey = Boolean(process.env.CLERK_SECRET_KEY);
+const shouldBypassClerk =
+  process.env.VERCEL_ENV === "preview" || !process.env.CLERK_SECRET_KEY;
 
 const clerkProxy = clerkMiddleware(async (auth, req) => {
   if (isProtectedRoute(req)) {
@@ -19,11 +20,11 @@ const clerkProxy = clerkMiddleware(async (auth, req) => {
   }
 });
 
-export default hasClerkSecretKey
-  ? clerkProxy
-  : function proxy() {
+export default shouldBypassClerk
+  ? function proxy() {
       return NextResponse.next();
-    };
+    }
+  : clerkProxy;
 
 export const config = {
   matcher: [
