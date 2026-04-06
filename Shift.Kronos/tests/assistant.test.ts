@@ -170,6 +170,22 @@ describe("assistant heuristic parsing", () => {
     expect(effectiveInput).toContain("11am");
   });
 
+  it("merges repeated bare-time clarification fragments without treating them as standalone retrieval queries", () => {
+    const effectiveInput = buildFollowUpInput("11AM 11am", [
+      {
+        role: "USER",
+        content: "Remind me to call mum tomorrow.",
+      },
+      {
+        role: "ASSISTANT",
+        content: "When should I schedule this reminder? You can say things like tomorrow at 8pm or tonight.",
+      },
+    ]);
+
+    expect(effectiveInput).toContain("Remind me to call mum tomorrow.");
+    expect(effectiveInput).toContain("11AM 11am");
+  });
+
   it("requests clarification when reminder timing is missing", () => {
     const result = parseAssistantIntentHeuristically("Remind me to submit the assignment", context);
 

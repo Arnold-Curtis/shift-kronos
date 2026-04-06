@@ -17,6 +17,13 @@ function shouldSkipSemanticRetrieval(query: string | null | undefined) {
     return true;
   }
 
+  if (
+    normalized.length <= 40 &&
+    /^(\d{1,2}(?::\d{2})?\s*(a\.?m\.?|p\.?m\.?))(\s+\1)+$/i.test(normalized)
+  ) {
+    return true;
+  }
+
   if (normalized.length <= 20 && /^\d{1,2}(?::\d{2})?\s*(a\.?m\.?|p\.?m\.?)$/i.test(normalized)) {
     return true;
   }
