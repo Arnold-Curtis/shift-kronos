@@ -64,6 +64,10 @@ describe("export service", () => {
       telegramChatId: "12345",
       timezone: "Africa/Lagos",
       displayName: "Shift User",
+      assistantProvider: "groq",
+      assistantModel: "llama-3.3-70b-versatile",
+      transcriptionProvider: "groq",
+      transcriptionModel: "whisper-large-v3",
       createdAt: baseDate,
       updatedAt: baseDate,
     });

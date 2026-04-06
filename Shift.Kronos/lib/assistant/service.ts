@@ -1,6 +1,12 @@
 import { ConversationMessageRole } from "@prisma/client";
 import { generateStructuredAssistantAction } from "@/lib/ai/providers/text";
-import { transcribeTextLikeAudio } from "@/lib/ai/providers/transcription";
+import { transcribeAudioInput } from "@/lib/ai/providers/transcription";
+import {
+  resolveAssistantModel,
+  resolveAssistantProvider,
+  resolveTranscriptionModel,
+  resolveTranscriptionProvider,
+} from "@/lib/ai/preferences";
 import { getAssistantContextForUser } from "@/lib/assistant/context";
 import { appendConversationMessage, ensureConversation } from "@/lib/assistant/conversations";
 import { assistantParseResultSchema } from "@/lib/assistant/schemas";
@@ -14,6 +20,7 @@ import {
 } from "@/lib/assistant/types";
 import { processConversationMemory } from "@/lib/memory/service";
 import { createReminder } from "@/lib/reminders/service";
+import { db } from "@/lib/db";
 
 function buildExecutedMessage(title: string, dueAt?: Date) {
   if (!dueAt) {
@@ -29,6 +36,15 @@ function buildAnswerMessage(summary: string, evidence: string[]) {
 
 export async function runAssistantWorkflow(input: AssistantWorkflowInput): Promise<AssistantWorkflowResult> {
   const now = input.now ?? new Date();
+  const user = await db.user.findUniqueOrThrow({
+    where: {
+      id: input.userId,
+    },
+    select: {
+      assistantProvider: true,
+      assistantModel: true,
+    },
+  });
   const conversation = await ensureConversation(input.userId, input.source, input.conversationId);
   const context = await getAssistantContextForUser(input.userId, now, input.input, conversation.id);
 
@@ -40,6 +56,8 @@ export async function runAssistantWorkflow(input: AssistantWorkflowInput): Promi
     await generateStructuredAssistantAction({
       input: input.input,
       context,
+      provider: resolveAssistantProvider(user),
+      model: resolveAssistantModel(user),
     }),
   ) as AssistantAction;
 
@@ -99,8 +117,31 @@ export async function runAssistantWorkflow(input: AssistantWorkflowInput): Promi
   };
 }
 
-export async function runVoiceAssistantWorkflow(userId: string, audioLikeInput: string) {
-  const transcription = await transcribeTextLikeAudio(audioLikeInput);
+export async function runVoiceAssistantWorkflow(userId: string, input: { transcript?: string; audioFile?: File | null }) {
+  const user = await db.user.findUniqueOrThrow({
+    where: {
+      id: userId,
+    },
+    select: {
+      transcriptionProvider: true,
+      transcriptionModel: true,
+    },
+  });
+
+  const transcription = await transcribeAudioInput({
+    input:
+      input.audioFile
+        ? {
+            kind: "file",
+            file: input.audioFile,
+          }
+        : {
+            kind: "text",
+            text: input.transcript ?? "",
+          },
+    provider: resolveTranscriptionProvider(user),
+    model: resolveTranscriptionModel(user),
+  });
 
   return {
     transcript: transcription.transcript,

@@ -11,6 +11,8 @@ const validEnv = {
   TELEGRAM_CHAT_ID: "123456789",
   GEMINI_API_KEY: "gemini_api_key",
   GROQ_API_KEY: "groq_api_key",
+  GITHUB_MODELS_API_KEY: "github_models_api_key",
+  GITHUB_MODELS_BASE_URL: "https://models.inference.ai.azure.com",
   PHASE4_FAKE_AI: "1",
   PHASE5_EMBEDDING_MODEL: "text-embedding-004",
   PHASE5_EMBEDDING_DIMENSIONS: "768",
@@ -63,6 +65,13 @@ describe("parseServerEnv", () => {
     expect(result.PHASE5_EMBEDDING_DIMENSIONS).toBe(768);
     expect(result.PHASE5_FAKE_EMBEDDINGS).toBe("1");
     expect(result.PHASE5_FAKE_PDF_EXTRACTION).toBe("1");
+  });
+
+  it("parses the optional GitHub models environment contract", () => {
+    const result = parseServerEnv(validEnv);
+
+    expect(result.GITHUB_MODELS_API_KEY).toBe("github_models_api_key");
+    expect(result.GITHUB_MODELS_BASE_URL).toBe("https://models.inference.ai.azure.com");
   });
 
   it("parses the Phase 6 memory environment contract", () => {

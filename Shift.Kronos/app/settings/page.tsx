@@ -1,7 +1,9 @@
 import { AppShell } from "@/components/layout/app-shell";
 import { SectionCard } from "@/components/dashboard/section-card";
+import { AiSettingsForm } from "@/components/settings/ai-settings-form";
 import Link from "next/link";
 import { requireCurrentUser } from "@/lib/current-user";
+import { getAssistantProviderOptions, getTranscriptionProviderOptions } from "@/lib/ai/preferences";
 import {
   EXPORT_DATASET,
   EXPORT_FORMAT,
@@ -9,6 +11,7 @@ import {
   getExportDatasetDescription,
   getExportDatasetLabel,
 } from "@/lib/export/service";
+import { getResolvedUserAiSettings } from "@/lib/settings/service";
 
 const settingsSections = [
   {
@@ -35,6 +38,9 @@ function buildExportHref(dataset: string, format: string) {
 export default async function SettingsPage() {
   const user = await requireCurrentUser();
   const csvDatasets = getAvailableCsvDatasets();
+  const assistantOptions = getAssistantProviderOptions();
+  const transcriptionOptions = getTranscriptionProviderOptions();
+  const aiSettings = getResolvedUserAiSettings(user as never);
 
   return (
     <AppShell
@@ -87,6 +93,20 @@ export default async function SettingsPage() {
                 Download full JSON export
               </Link>
             </div>
+          </SectionCard>
+
+          <SectionCard
+            title="AI model routing"
+            description="Choose which assistant model backend powers chat and which transcription model handles recorded audio before it enters the assistant workflow."
+          >
+            <AiSettingsForm
+              assistantOptions={assistantOptions}
+              transcriptionOptions={transcriptionOptions}
+              currentAssistantProvider={aiSettings.assistantProvider}
+              currentAssistantModel={aiSettings.assistantModel}
+              currentTranscriptionProvider={aiSettings.transcriptionProvider}
+              currentTranscriptionModel={aiSettings.transcriptionModel}
+            />
           </SectionCard>
 
           <SectionCard

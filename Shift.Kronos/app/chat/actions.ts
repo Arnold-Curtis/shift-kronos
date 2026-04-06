@@ -56,8 +56,10 @@ export async function submitQuickCaptureAction(formData: FormData) {
 
 export async function submitVoiceCaptureAction(formData: FormData) {
   const user = await requireCurrentUser();
+  const transcript = String(formData.get("transcript") ?? "");
+
   const result = assistantVoiceInputSchema.safeParse({
-    transcript: String(formData.get("transcript") ?? ""),
+    transcript,
   });
 
   if (!result.success) {
@@ -66,7 +68,9 @@ export async function submitVoiceCaptureAction(formData: FormData) {
 
   const values = result.data;
 
-  await runVoiceAssistantWorkflow(user.id, values.transcript);
+  await runVoiceAssistantWorkflow(user.id, {
+    transcript: values.transcript,
+  });
 
   revalidatePath("/");
   revalidatePath("/reminders");
