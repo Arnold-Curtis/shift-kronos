@@ -10,13 +10,14 @@ import { cn } from "@/lib/utils";
 
 type ChatPanelProps = {
   conversations: ConversationView[];
+  selectedConversation?: ConversationView | null;
   selectedConversationId?: string | null;
 };
 
-export function ChatPanel({ conversations, selectedConversationId }: ChatPanelProps) {
+export function ChatPanel({ conversations, selectedConversation, selectedConversationId }: ChatPanelProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const activeConversation =
-    conversations.find((c) => c.id === selectedConversationId) ?? conversations[0] ?? null;
+    selectedConversation ?? conversations.find((c) => c.id === selectedConversationId) ?? conversations[0] ?? null;
 
   return (
     <div className="flex h-[calc(100dvh-140px)] lg:h-[calc(100dvh-96px)] overflow-hidden rounded-2xl border border-border-subtle bg-bg-elevated/50">

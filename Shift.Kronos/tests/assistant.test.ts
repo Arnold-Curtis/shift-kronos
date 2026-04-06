@@ -2,7 +2,7 @@ import { ReminderPriority, ReminderType, RecurrenceFrequency, RetrievalSourceTyp
 import { describe, expect, it } from "vitest";
 import { parseAssistantIntentHeuristically } from "@/lib/ai/heuristics";
 import { ASSISTANT_ACTION_TYPE } from "@/lib/assistant/types";
-import { buildFollowUpInput } from "@/lib/assistant/service";
+import { buildFollowUpInput, buildStructuredFollowUpInput } from "@/lib/assistant/service";
 import { generateStructuredAssistantAction } from "@/lib/ai/providers/text";
 
 const context = {
@@ -185,6 +185,130 @@ describe("assistant heuristic parsing", () => {
 
     expect(effectiveInput).toContain("Remind me to call mum tomorrow.");
     expect(effectiveInput).toContain("11AM 11am");
+  });
+
+  it("anchors timetable clarification replies to the original request instead of the latest bare fragment", () => {
+    const effectiveInput = buildStructuredFollowUpInput("10am", [
+      {
+        role: "ASSISTANT" as const,
+        content: "What time does this class end? Timetable entries need both a start time and an end time.",
+        structuredData: {
+          type: ASSISTANT_ACTION_TYPE.CLARIFY_MISSING_FIELDS,
+          clarification: {
+            missingFields: ["endTime"],
+            question: "What time does this class end? Timetable entries need both a start time and an end time.",
+          },
+        },
+      },
+      {
+        role: "USER" as const,
+        content: "yes a timetable entry tomorrow at 8am",
+        structuredData: null,
+      },
+    ]);
+
+    expect(effectiveInput).toBe("yes a timetable entry tomorrow at 8am to 10am");
+  });
+
+  it("keeps the original timetable request anchored across repeated clarification loops", () => {
+    const effectiveInput = buildStructuredFollowUpInput("10am", [
+      {
+        role: "ASSISTANT" as const,
+        content: "What time does this class end? Timetable entries need both a start time and an end time.",
+        structuredData: {
+          type: ASSISTANT_ACTION_TYPE.CLARIFY_MISSING_FIELDS,
+          clarification: {
+            missingFields: ["endTime"],
+            question: "What time does this class end? Timetable entries need both a start time and an end time.",
+          },
+        },
+      },
+      {
+        role: "USER" as const,
+        content: "10am",
+        structuredData: {
+          source: "web-chat",
+          effectiveInput: "yes a timetable entry tomorrow at 8am to 10am",
+        },
+      },
+      {
+        role: "ASSISTANT" as const,
+        content: "What time does this class end? Timetable entries need both a start time and an end time.",
+        structuredData: {
+          type: ASSISTANT_ACTION_TYPE.CLARIFY_MISSING_FIELDS,
+          clarification: {
+            missingFields: ["endTime"],
+            question: "What time does this class end? Timetable entries need both a start time and an end time.",
+          },
+        },
+      },
+      {
+        role: "USER" as const,
+        content: "yes a timetable entry tomorrow at 8am",
+        structuredData: null,
+      },
+    ]);
+
+    expect(effectiveInput).toBe("yes a timetable entry tomorrow at 8am to 10am");
+  });
+
+  it("resolves reminder follow-up questions against the most recent assistant-created reminder", () => {
+    const effectiveInput = buildStructuredFollowUpInput("when is it again?", [
+      {
+        role: "ASSISTANT" as const,
+        content: "Created reminder: Submit assignment for 2026-04-07T20:00:00.000Z.",
+        structuredData: {
+          type: ASSISTANT_ACTION_TYPE.CREATE_REMINDER,
+          confidence: "high",
+          reminder: {
+            title: "Submit assignment",
+            type: "ONE_TIME",
+            priority: "HIGH",
+            tags: ["school"],
+            dueAt: "2026-04-07T20:00:00.000Z",
+          },
+        },
+      },
+      {
+        role: "USER" as const,
+        content: "Remind me to submit the assignment tomorrow at 8pm",
+        structuredData: null,
+      },
+    ]);
+
+    expect(effectiveInput).toContain("Submit assignment");
+    expect(effectiveInput).toContain("2026-04-07T20:00:00.000Z");
+  });
+
+  it("resolves timetable follow-up questions against the most recent assistant-created class", () => {
+    const effectiveInput = buildStructuredFollowUpInput("when is that class again?", [
+      {
+        role: "ASSISTANT" as const,
+        content: "Created timetable entry: business communications every Tuesday from 08:00 to 10:00, between Tue, Apr 7 and Mon, Aug 31.",
+        structuredData: {
+          type: ASSISTANT_ACTION_TYPE.CREATE_TIMETABLE_ENTRY,
+          confidence: "high",
+          timetableEntry: {
+            subject: "business communications",
+            dayOfWeek: 2,
+            startTime: "08:00",
+            endTime: "10:00",
+            semesterStart: "2026-04-01T00:00:00.000Z",
+            semesterEnd: "2026-08-31T00:00:00.000Z",
+            reminderLeadMinutes: 30,
+          },
+        },
+      },
+      {
+        role: "USER" as const,
+        content: "yes a timetable entry tomorrow at 8am to 10am",
+        structuredData: null,
+      },
+    ]);
+
+    expect(effectiveInput).toContain("business communications");
+    expect(effectiveInput).toContain("08:00");
+    expect(effectiveInput).toContain("10:00");
   });
 
   it("sanitizes oversized clarification payloads instead of crashing schema validation", async () => {

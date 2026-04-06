@@ -5,6 +5,7 @@ import { Mic, Square, Loader2 } from "lucide-react";
 import { useToast } from "@/components/ui/toast";
 
 export function VoiceFab() {
+  const [conversationId, setConversationId] = useState<string | undefined>();
   const [isRecording, setIsRecording] = useState(false);
   const [isPending, startTransition] = useTransition();
   const recorderRef = useRef<MediaRecorder | null>(null);
@@ -48,6 +49,9 @@ export function VoiceFab() {
 
         const formData = new FormData();
         formData.set("audio", file);
+        if (conversationId) {
+          formData.set("conversationId", conversationId);
+        }
 
         startTransition(async () => {
           try {
@@ -64,9 +68,13 @@ export function VoiceFab() {
             const result = (await response.json()) as {
               transcript?: string;
               message?: string;
+              conversationId?: string;
             };
 
             if (result.transcript) {
+              if (result.conversationId) {
+                setConversationId(result.conversationId);
+              }
               addToast(
                 "success",
                 result.message ?? "Got it! Your voice note has been processed.",

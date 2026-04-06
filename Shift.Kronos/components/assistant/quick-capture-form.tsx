@@ -22,6 +22,9 @@ export function QuickCaptureForm() {
     INITIAL_ASSISTANT_ACTION_STATE,
   );
 
+  const conversationId =
+    voiceCaptureState.conversationId ?? quickCaptureState.conversationId;
+
   async function startRecording() {
     if (!navigator.mediaDevices?.getUserMedia) {
       setAudioStatus("Microphone recording is not supported in this browser.");
@@ -50,6 +53,9 @@ export function QuickCaptureForm() {
 
         const formData = new FormData();
         formData.set("audio", file);
+        if (conversationId) {
+          formData.set("conversationId", conversationId);
+        }
 
         startTransition(async () => {
           try {
@@ -63,7 +69,11 @@ export function QuickCaptureForm() {
               return;
             }
 
-            const result = (await response.json()) as { transcript?: string; message?: string };
+            const result = (await response.json()) as {
+              transcript?: string;
+              message?: string;
+              conversationId?: string;
+            };
 
             if (result.transcript) {
               setTranscript(result.transcript);
@@ -96,6 +106,7 @@ export function QuickCaptureForm() {
   return (
     <div className="grid gap-4 xl:grid-cols-2">
       <form action={quickCaptureAction} className="grid gap-3 rounded-3xl border border-border bg-panel px-5 py-5">
+        <input type="hidden" name="conversationId" value={conversationId ?? ""} />
         <div className="space-y-2">
           <p className="text-sm font-semibold text-foreground">Natural-language quick capture</p>
           <p className="text-sm leading-6 text-foreground-muted">
@@ -132,7 +143,7 @@ export function QuickCaptureForm() {
                   Open reminders
                 </Link>
                 <Link
-                  href="/chat"
+                  href={conversationId ? `/chat?conversationId=${conversationId}` : "/chat"}
                   className="inline-flex rounded-2xl border border-border px-3 py-2 text-xs font-semibold text-foreground transition hover:bg-white/5"
                 >
                   Open assistant chat
@@ -169,6 +180,7 @@ export function QuickCaptureForm() {
         ) : null}
 
         <form action={voiceCaptureAction} className="grid gap-3">
+          <input type="hidden" name="conversationId" value={conversationId ?? ""} />
           <textarea
             name="transcript"
             rows={4}
@@ -199,7 +211,7 @@ export function QuickCaptureForm() {
                     Open reminders
                   </Link>
                   <Link
-                    href="/chat"
+                    href={conversationId ? `/chat?conversationId=${conversationId}` : "/chat"}
                     className="inline-flex rounded-2xl border border-border px-3 py-2 text-xs font-semibold text-foreground transition hover:bg-white/5"
                   >
                     Open assistant chat

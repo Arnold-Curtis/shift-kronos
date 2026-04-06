@@ -67,6 +67,18 @@ export async function ensureConversation(userId: string, source: string, convers
   return created;
 }
 
+export async function getLatestConversationBySource(userId: string, source: string) {
+  return db.conversation.findFirst({
+    where: {
+      userId,
+      source,
+    },
+    orderBy: {
+      updatedAt: "desc",
+    },
+  });
+}
+
 export async function appendConversationMessage(
   conversationId: string,
   role: ConversationMessageRole,

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
 import { Send } from "lucide-react";
 import { INITIAL_ASSISTANT_ACTION_STATE } from "@/app/chat/action-state";
@@ -11,9 +12,12 @@ export function QuickAddBar() {
     INITIAL_ASSISTANT_ACTION_STATE,
   );
 
+  const conversationId = state.conversationId;
+
   return (
     <div className="animate-fade-in">
       <form action={action} className="relative">
+        <input type="hidden" name="conversationId" value={conversationId ?? ""} />
         <input
           type="text"
           name="input"
@@ -41,6 +45,13 @@ export function QuickAddBar() {
           }`}
         >
           {state.message}
+          {state.status === "success" && conversationId ? (
+            <div className="mt-2">
+              <Link href={`/chat?conversationId=${conversationId}`} className="font-semibold underline underline-offset-2">
+                Continue in chat
+              </Link>
+            </div>
+          ) : null}
         </div>
       )}
     </div>

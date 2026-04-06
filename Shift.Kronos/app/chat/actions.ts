@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireCurrentUser } from "@/lib/current-user";
+import { getLatestConversationBySource } from "@/lib/assistant/conversations";
 import { assistantChatInputSchema, assistantQuickCaptureSchema, assistantVoiceInputSchema } from "@/lib/assistant/schemas";
 import { runAssistantWorkflow, runVoiceAssistantWorkflow } from "@/lib/assistant/service";
 import { ASSISTANT_INPUT_SOURCE } from "@/lib/assistant/types";
@@ -11,6 +12,7 @@ export async function submitChatMessageAction(
   _previousState: AssistantActionState = INITIAL_ASSISTANT_ACTION_STATE,
   formData: FormData,
 ): Promise<AssistantActionState> {
+  void _previousState;
   const user = await requireCurrentUser();
   const result = assistantChatInputSchema.safeParse({
     message: String(formData.get("message") ?? ""),
@@ -49,9 +51,11 @@ export async function submitQuickCaptureAction(
   _previousState: AssistantActionState,
   formData: FormData,
 ): Promise<AssistantActionState> {
+  void _previousState;
   const user = await requireCurrentUser();
   const result = assistantQuickCaptureSchema.safeParse({
     input: String(formData.get("input") ?? ""),
+    conversationId: String(formData.get("conversationId") ?? "") || undefined,
   });
 
   if (!result.success) {
@@ -62,11 +66,15 @@ export async function submitQuickCaptureAction(
   }
 
   const values = result.data;
+  const existingConversation = values.conversationId
+    ? { id: values.conversationId }
+    : await getLatestConversationBySource(user.id, ASSISTANT_INPUT_SOURCE.WEB_CAPTURE);
 
   const workflowResult = await runAssistantWorkflow({
     userId: user.id,
     input: values.input,
     source: ASSISTANT_INPUT_SOURCE.WEB_CAPTURE,
+    conversationId: existingConversation?.id,
   });
 
   revalidatePath("/");
@@ -85,11 +93,12 @@ export async function submitVoiceCaptureAction(
   _previousState: AssistantActionState,
   formData: FormData,
 ): Promise<AssistantActionState> {
+  void _previousState;
   const user = await requireCurrentUser();
-  const transcript = String(formData.get("transcript") ?? "");
 
   const result = assistantVoiceInputSchema.safeParse({
-    transcript,
+    transcript: String(formData.get("transcript") ?? ""),
+    conversationId: String(formData.get("conversationId") ?? "") || undefined,
   });
 
   if (!result.success) {
@@ -100,9 +109,13 @@ export async function submitVoiceCaptureAction(
   }
 
   const values = result.data;
+  const existingConversation = values.conversationId
+    ? { id: values.conversationId }
+    : await getLatestConversationBySource(user.id, ASSISTANT_INPUT_SOURCE.VOICE);
 
   const workflowResult = await runVoiceAssistantWorkflow(user.id, {
     transcript: values.transcript,
+    conversationId: existingConversation?.id,
   });
 
   revalidatePath("/");

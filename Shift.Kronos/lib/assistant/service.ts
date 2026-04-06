@@ -24,6 +24,23 @@ import { createTimetableEntry } from "@/lib/timetable/service";
 import { db } from "@/lib/db";
 import { formatDateLabel } from "@/lib/datetime";
 
+type RecentEntityReference =
+  | {
+      kind: "reminder";
+      title: string;
+      dueAt: Date | null;
+      priority: string;
+    }
+  | {
+      kind: "timetable";
+      subject: string;
+      dayOfWeek: number;
+      startTime: string;
+      endTime: string;
+      semesterStart: Date;
+      semesterEnd: Date;
+    };
+
 function buildExecutedMessage(title: string, dueAt?: Date) {
   if (!dueAt) {
     return `Created reminder: ${title}.`;
@@ -62,6 +79,108 @@ function buildTimetableClarificationMessage(missingFields: string[]) {
 
 function buildAnswerMessage(summary: string, evidence: string[]) {
   return evidence.length > 0 ? `${summary}\n\n${evidence.join("\n")}` : summary;
+}
+
+function getRecentEntityReference(
+  recentConversation: Array<{
+    role: ConversationMessageRole;
+    content: string;
+    structuredData: unknown;
+  }>,
+): RecentEntityReference | null {
+  for (const message of recentConversation) {
+    if (message.role !== ConversationMessageRole.ASSISTANT || !message.structuredData || typeof message.structuredData !== "object") {
+      continue;
+    }
+
+    const candidate = message.structuredData as Record<string, unknown>;
+
+    if (candidate.type === ASSISTANT_ACTION_TYPE.CREATE_REMINDER) {
+      const reminder = candidate.reminder as Record<string, unknown> | undefined;
+
+      if (!reminder?.title) {
+        continue;
+      }
+
+      return {
+        kind: "reminder",
+        title: String(reminder.title),
+        dueAt: typeof reminder.dueAt === "string" && reminder.dueAt ? new Date(reminder.dueAt) : null,
+        priority: typeof reminder.priority === "string" ? reminder.priority : "MEDIUM",
+      };
+    }
+
+    if (candidate.type === ASSISTANT_ACTION_TYPE.CREATE_TIMETABLE_ENTRY) {
+      const timetableEntry = candidate.timetableEntry as Record<string, unknown> | undefined;
+
+      if (
+        !timetableEntry?.subject ||
+        typeof timetableEntry.dayOfWeek !== "number" ||
+        typeof timetableEntry.startTime !== "string" ||
+        typeof timetableEntry.endTime !== "string" ||
+        typeof timetableEntry.semesterStart !== "string" ||
+        typeof timetableEntry.semesterEnd !== "string"
+      ) {
+        continue;
+      }
+
+      return {
+        kind: "timetable",
+        subject: String(timetableEntry.subject),
+        dayOfWeek: timetableEntry.dayOfWeek,
+        startTime: timetableEntry.startTime,
+        endTime: timetableEntry.endTime,
+        semesterStart: new Date(timetableEntry.semesterStart),
+        semesterEnd: new Date(timetableEntry.semesterEnd),
+      };
+    }
+  }
+
+  return null;
+}
+
+function resolveRecentEntityFollowUp(
+  input: string,
+  recentConversation: Array<{
+    role: ConversationMessageRole;
+    content: string;
+    structuredData: unknown;
+  }>,
+) {
+  const normalizedInput = input.trim();
+  const lower = normalizedInput.toLowerCase();
+
+  if (!normalizedInput) {
+    return null;
+  }
+
+  const referencesRecentEntity =
+    /\b(it|that|this reminder|that reminder|this class|that class)\b/i.test(normalizedInput) ||
+    lower.includes("again");
+
+  if (!referencesRecentEntity) {
+    return null;
+  }
+
+  const entity = getRecentEntityReference(recentConversation);
+
+  if (!entity) {
+    return null;
+  }
+
+  if (entity.kind === "reminder") {
+    if (lower.includes("when") || lower.includes("due") || lower.includes("again")) {
+      return `What is the schedule for reminder ${entity.title}${entity.dueAt ? ` due ${entity.dueAt.toISOString()}` : ""}?`;
+    }
+  }
+
+  if (entity.kind === "timetable") {
+    if (lower.includes("when") || lower.includes("again") || lower.includes("what time")) {
+      return `What is the schedule for class ${entity.subject} from ${entity.startTime} to ${entity.endTime}?`;
+    }
+  }
+
+  return null;
 }
 
 export function buildFollowUpInput(input: string, recentConversation: Array<{ role: ConversationMessageRole; content: string }>) {
@@ -121,47 +240,10 @@ export function buildFollowUpInput(input: string, recentConversation: Array<{ ro
   return `${lastUserMessage.content.trim()} ${normalizedInput}`;
 }
 
-function buildStructuredFollowUpInput(
-  input: string,
-  recentConversation: Array<{
-    role: ConversationMessageRole;
-    content: string;
-    structuredData: unknown;
-  }>,
-) {
-  const normalizedInput = input.trim();
+function looksLikeStandaloneIntent(input: string) {
+  const lower = input.trim().toLowerCase();
 
-  if (!normalizedInput) {
-    return input;
-  }
-
-  const recent = [...recentConversation];
-  const lastAssistantClarification = recent.find((message) => {
-    if (message.role !== ConversationMessageRole.ASSISTANT || !message.structuredData || typeof message.structuredData !== "object") {
-      return false;
-    }
-
-    const candidate = message.structuredData as Record<string, unknown>;
-    return candidate.type === ASSISTANT_ACTION_TYPE.CLARIFY_MISSING_FIELDS;
-  });
-
-  if (!lastAssistantClarification) {
-    return buildFollowUpInput(input, recentConversation.map((message) => ({ role: message.role, content: message.content })));
-  }
-
-  const clarification = (lastAssistantClarification.structuredData as Record<string, unknown>).clarification as Record<string, unknown> | undefined;
-  const missingFields = Array.isArray(clarification?.missingFields)
-    ? clarification.missingFields.map((item) => String(item))
-    : [];
-
-  const lastUserMessage = recent.find((message) => message.role === ConversationMessageRole.USER);
-
-  if (!lastUserMessage) {
-    return input;
-  }
-
-  const lower = normalizedInput.toLowerCase();
-  const isStandaloneIntent =
+  return (
     lower.startsWith("remind me") ||
     lower.startsWith("add a reminder") ||
     lower.startsWith("set a reminder") ||
@@ -175,17 +257,105 @@ function buildStructuredFollowUpInput(
     lower.startsWith("schedule a class") ||
     lower.startsWith("what ") ||
     lower.startsWith("do ") ||
-    lower.startsWith("can ");
+    lower.startsWith("can ")
+  );
+}
 
-  if (isStandaloneIntent) {
+function looksLikeBareTimeReply(input: string) {
+  return /^(?:at\s+)?\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?)$/i.test(input.trim());
+}
+
+function getClarificationAnchorMessage(
+  recentConversation: Array<{
+    role: ConversationMessageRole;
+    content: string;
+    structuredData: unknown;
+  }>,
+) {
+  for (let index = 0; index < recentConversation.length; index += 1) {
+    const message = recentConversation[index];
+
+    if (message.role !== ConversationMessageRole.ASSISTANT || !message.structuredData || typeof message.structuredData !== "object") {
+      continue;
+    }
+
+    const candidate = message.structuredData as Record<string, unknown>;
+
+    if (candidate.type !== ASSISTANT_ACTION_TYPE.CLARIFY_MISSING_FIELDS) {
+      continue;
+    }
+
+    for (let userIndex = recentConversation.length - 1; userIndex > index; userIndex -= 1) {
+      const userMessage = recentConversation[userIndex];
+
+      if (userMessage.role === ConversationMessageRole.USER) {
+        return {
+          anchor: userMessage.content.trim(),
+          clarification: candidate,
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
+export function buildStructuredFollowUpInput(
+  input: string,
+  recentConversation: Array<{
+    role: ConversationMessageRole;
+    content: string;
+    structuredData: unknown;
+  }>,
+) {
+  const normalizedInput = input.trim();
+
+  if (!normalizedInput) {
     return input;
   }
 
-  if (missingFields.length === 0) {
-    return `${lastUserMessage.content.trim()} ${normalizedInput}`;
+  const recentEntityFollowUp = resolveRecentEntityFollowUp(input, recentConversation);
+
+  if (recentEntityFollowUp) {
+    return recentEntityFollowUp;
   }
 
-  return `${lastUserMessage.content.trim()} ${normalizedInput}`;
+  const recent = [...recentConversation];
+  const clarificationContext = getClarificationAnchorMessage(recent);
+  const lastAssistantClarification = clarificationContext?.clarification;
+
+  if (!lastAssistantClarification) {
+    return buildFollowUpInput(input, recentConversation.map((message) => ({ role: message.role, content: message.content })));
+  }
+
+  const clarification = lastAssistantClarification.clarification as Record<string, unknown> | undefined;
+  const missingFields = Array.isArray(clarification?.missingFields)
+    ? clarification.missingFields.map((item) => String(item))
+    : [];
+
+  if (!clarificationContext?.anchor) {
+    return input;
+  }
+
+  if (looksLikeStandaloneIntent(normalizedInput)) {
+    return input;
+  }
+
+  const anchor = clarificationContext.anchor;
+
+  if (missingFields.includes("endTime") && looksLikeBareTimeReply(normalizedInput)) {
+    return `${anchor} to ${normalizedInput}`;
+  }
+
+  if (missingFields.includes("startTime") && looksLikeBareTimeReply(normalizedInput)) {
+    return `${anchor} at ${normalizedInput}`;
+  }
+
+  if (missingFields.length === 0) {
+    return `${anchor} ${normalizedInput}`;
+  }
+
+  return `${anchor} ${normalizedInput}`;
 }
 
 export async function runAssistantWorkflow(input: AssistantWorkflowInput): Promise<AssistantWorkflowResult> {
@@ -340,7 +510,10 @@ export async function runAssistantWorkflow(input: AssistantWorkflowInput): Promi
   };
 }
 
-export async function runVoiceAssistantWorkflow(userId: string, input: { transcript?: string; audioFile?: File | null }) {
+export async function runVoiceAssistantWorkflow(
+  userId: string,
+  input: { transcript?: string; audioFile?: File | null; conversationId?: string },
+) {
   const user = await db.user.findUniqueOrThrow({
     where: {
       id: userId,
@@ -372,6 +545,7 @@ export async function runVoiceAssistantWorkflow(userId: string, input: { transcr
       userId,
       input: transcription.transcript,
       source: ASSISTANT_INPUT_SOURCE.VOICE,
+      conversationId: input.conversationId,
     }),
   };
 }

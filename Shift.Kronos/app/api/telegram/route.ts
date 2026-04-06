@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { getLatestConversationBySource } from "@/lib/assistant/conversations";
 import { sendPlainTelegramMessage } from "@/lib/notifications/telegram";
 import { answerTelegramCallbackQuery } from "@/lib/notifications/telegram";
 import { handleTelegramCallbackAction } from "@/lib/notifications/callback-actions";
@@ -63,6 +64,7 @@ export async function POST(request: Request) {
         userId: user.id,
         input: message.text,
         source: ASSISTANT_INPUT_SOURCE.TELEGRAM,
+        conversationId: (await getLatestConversationBySource(user.id, ASSISTANT_INPUT_SOURCE.TELEGRAM))?.id,
       });
 
       await sendPlainTelegramMessage(chatId, result.message);

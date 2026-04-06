@@ -9,6 +9,7 @@ export async function POST(request: Request) {
   try {
     const formData = await request.formData();
     const audioFile = formData.get("audio");
+    const conversationId = String(formData.get("conversationId") ?? "") || undefined;
 
     if (!(audioFile instanceof File) || audioFile.size === 0) {
       logWarn("assistant.voice.invalid-audio", {
@@ -20,6 +21,7 @@ export async function POST(request: Request) {
 
     const result = await runVoiceAssistantWorkflow(user.id, {
       audioFile,
+      conversationId,
     });
 
     logInfo("assistant.voice.transcribed", {
@@ -31,6 +33,7 @@ export async function POST(request: Request) {
       transcript: result.transcript,
       message: result.result.message,
       kind: result.result.kind,
+      conversationId: result.result.conversationId,
     });
   } catch (error) {
     logError("assistant.voice.failed", {

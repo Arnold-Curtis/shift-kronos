@@ -72,10 +72,12 @@ export const assistantChatInputSchema = z.object({
 
 export const assistantVoiceInputSchema = z.object({
   transcript: z.string().trim().min(1).max(8000),
+  conversationId: z.string().trim().min(1).optional(),
 });
 
 export const assistantQuickCaptureSchema = z.object({
   input: z.string().trim().min(1).max(1000),
+  conversationId: z.string().trim().min(1).optional(),
 });
 
 export function buildAssistantFallbackReminder(input: string) {

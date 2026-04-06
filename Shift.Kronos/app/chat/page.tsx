@@ -21,6 +21,7 @@ export default async function ChatPage({
     <div className="pb-4">
       <ChatPanel
         conversations={conversations}
+        selectedConversation={selectedConversation}
         selectedConversationId={selectedConversation?.id}
       />
     </div>
