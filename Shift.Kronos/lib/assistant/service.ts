@@ -64,6 +64,63 @@ function buildAnswerMessage(summary: string, evidence: string[]) {
   return evidence.length > 0 ? `${summary}\n\n${evidence.join("\n")}` : summary;
 }
 
+export function buildFollowUpInput(input: string, recentConversation: Array<{ role: ConversationMessageRole; content: string }>) {
+  const normalizedInput = input.trim();
+
+  if (!normalizedInput) {
+    return input;
+  }
+
+  const lastAssistantMessage = [...recentConversation]
+    .reverse()
+    .find((message) => message.role === ConversationMessageRole.ASSISTANT);
+
+  const lastAssistantContent = lastAssistantMessage?.content.trim() ?? "";
+  const looksLikeClarification =
+    /[?]$/.test(lastAssistantContent) ||
+    /^what\b/i.test(lastAssistantContent) ||
+    /^which\b/i.test(lastAssistantContent) ||
+    /^when\b/i.test(lastAssistantContent) ||
+    /^do you want\b/i.test(lastAssistantContent) ||
+    /need both a start time and an end time/i.test(lastAssistantContent) ||
+    /need a few more/i.test(lastAssistantContent);
+
+  if (!lastAssistantMessage || !looksLikeClarification) {
+    return input;
+  }
+
+  const lastUserMessage = [...recentConversation]
+    .reverse()
+    .find((message) => message.role === ConversationMessageRole.USER);
+
+  if (!lastUserMessage) {
+    return input;
+  }
+
+  const lower = normalizedInput.toLowerCase();
+  const isStandaloneIntent =
+    lower.startsWith("remind me") ||
+    lower.startsWith("add a reminder") ||
+    lower.startsWith("set a reminder") ||
+    lower.startsWith("set reminder") ||
+    lower.startsWith("add reminder") ||
+    lower.startsWith("create reminder") ||
+    lower.startsWith("add a timetable entry") ||
+    lower.startsWith("add timetable entry") ||
+    lower.startsWith("add a class") ||
+    lower.startsWith("add class") ||
+    lower.startsWith("schedule a class") ||
+    lower.startsWith("what ") ||
+    lower.startsWith("do ") ||
+    lower.startsWith("can ");
+
+  if (isStandaloneIntent) {
+    return input;
+  }
+
+  return `${lastUserMessage.content.trim()} ${normalizedInput}`;
+}
+
 export async function runAssistantWorkflow(input: AssistantWorkflowInput): Promise<AssistantWorkflowResult> {
   const now = input.now ?? new Date();
   const user = await db.user.findUniqueOrThrow({
@@ -77,15 +134,17 @@ export async function runAssistantWorkflow(input: AssistantWorkflowInput): Promi
   });
   const conversation = await ensureConversation(input.userId, input.source, input.conversationId);
   const context = await getAssistantContextForUser(input.userId, now, input.input, conversation.id);
+  const effectiveInput = buildFollowUpInput(input.input, context.recentConversation);
 
   await appendConversationMessage(conversation.id, ConversationMessageRole.USER, input.input, {
     source: input.source,
+    effectiveInput,
   });
 
   const action = assistantParseResultSchema.parse(
     await generateStructuredAssistantAction({
       userId: input.userId,
-      input: input.input,
+      input: effectiveInput,
       context,
       provider: resolveAssistantProvider(user),
       model: resolveAssistantModel(user),

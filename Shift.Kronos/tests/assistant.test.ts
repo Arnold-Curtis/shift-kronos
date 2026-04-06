@@ -2,6 +2,7 @@ import { ReminderPriority, ReminderType, RecurrenceFrequency, RetrievalSourceTyp
 import { describe, expect, it } from "vitest";
 import { parseAssistantIntentHeuristically } from "@/lib/ai/heuristics";
 import { ASSISTANT_ACTION_TYPE } from "@/lib/assistant/types";
+import { buildFollowUpInput } from "@/lib/assistant/service";
 
 const context = {
   timezone: "Africa/Lagos",
@@ -120,6 +121,37 @@ describe("assistant heuristic parsing", () => {
     expect(result.timetableEntry.dayOfWeek).toBe(2);
     expect(result.timetableEntry.startTime).toBe("08:00");
     expect(result.timetableEntry.endTime).toBe("10:00");
+  });
+
+  it("merges a clarification reply with the prior user request for follow-up turns", () => {
+    const effectiveInput = buildFollowUpInput("it starts at 8am ends at 10am", [
+      {
+        role: "USER",
+        content: "Add a timetable entry for tomorrow at 8 a.m. that I have a business communications class.",
+      },
+      {
+        role: "ASSISTANT",
+        content: "What time does this class end? Timetable entries need both a start time and an end time.",
+      },
+    ]);
+
+    expect(effectiveInput).toContain("Add a timetable entry for tomorrow at 8 a.m.");
+    expect(effectiveInput).toContain("it starts at 8am ends at 10am");
+  });
+
+  it("does not merge follow-up input when the new turn already contains a standalone intent", () => {
+    const effectiveInput = buildFollowUpInput("Add a reminder for tonight at 9pm to revise.", [
+      {
+        role: "USER",
+        content: "Add a timetable entry for tomorrow at 8 a.m. that I have a business communications class.",
+      },
+      {
+        role: "ASSISTANT",
+        content: "What time does this class end? Timetable entries need both a start time and an end time.",
+      },
+    ]);
+
+    expect(effectiveInput).toBe("Add a reminder for tonight at 9pm to revise.");
   });
 
   it("requests clarification when reminder timing is missing", () => {
