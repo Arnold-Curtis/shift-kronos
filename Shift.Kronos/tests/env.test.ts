@@ -11,8 +11,10 @@ const validEnv = {
   TELEGRAM_CHAT_ID: "123456789",
   GEMINI_API_KEY: "gemini_api_key",
   GROQ_API_KEY: "groq_api_key",
-  GITHUB_MODELS_API_KEY: "github_models_api_key",
-  GITHUB_MODELS_BASE_URL: "https://models.inference.ai.azure.com",
+  OPENROUTER_API_KEY: "openrouter_api_key",
+  OPENROUTER_BASE_URL: "https://openrouter.ai/api/v1",
+  OPENROUTER_HTTP_REFERER: "https://shift-kronos.test",
+  OPENROUTER_TITLE: "Shift:Kronos",
   PHASE4_FAKE_AI: "1",
   PHASE5_EMBEDDING_MODEL: "text-embedding-004",
   PHASE5_EMBEDDING_DIMENSIONS: "768",
@@ -67,11 +69,13 @@ describe("parseServerEnv", () => {
     expect(result.PHASE5_FAKE_PDF_EXTRACTION).toBe("1");
   });
 
-  it("parses the optional GitHub models environment contract", () => {
+  it("parses the OpenRouter environment contract", () => {
     const result = parseServerEnv(validEnv);
 
-    expect(result.GITHUB_MODELS_API_KEY).toBe("github_models_api_key");
-    expect(result.GITHUB_MODELS_BASE_URL).toBe("https://models.inference.ai.azure.com");
+    expect(result.OPENROUTER_API_KEY).toBe("openrouter_api_key");
+    expect(result.OPENROUTER_BASE_URL).toBe("https://openrouter.ai/api/v1");
+    expect(result.OPENROUTER_HTTP_REFERER).toBe("https://shift-kronos.test");
+    expect(result.OPENROUTER_TITLE).toBe("Shift:Kronos");
   });
 
   it("parses the Phase 6 memory environment contract", () => {

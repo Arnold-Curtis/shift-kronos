@@ -11,6 +11,7 @@ import {
   DEFAULT_ASSISTANT_MODEL_BY_PROVIDER,
 } from "@/lib/ai/preferences";
 import { memorySummarySchema } from "@/lib/memory/schemas";
+import { logWarn } from "@/lib/observability/logger";
 import {
   ConversationMessageRole,
   RecurrenceFrequency,
@@ -19,6 +20,7 @@ import {
 } from "@prisma/client";
 
 export type StructuredAssistantRequest = {
+  userId?: string;
   input: string;
   context: AssistantContext;
   provider?: AssistantProvider;
@@ -26,6 +28,7 @@ export type StructuredAssistantRequest = {
 };
 
 export type StructuredMemorySummaryRequest = {
+  userId?: string;
   conversationId: string;
   messages: Array<{
     role: ConversationMessageRole;
@@ -97,6 +100,7 @@ function buildAssistantSystemPrompt() {
   return [
     "You are Shift:Kronos assistant.",
     "Return only valid JSON matching the requested schema.",
+    "Do not wrap the JSON in markdown, code fences, or commentary.",
     "You must stay deterministic at the mutation boundary.",
     "Create reminders only when the user intent is clear enough.",
     "If timing or title is missing, ask a clarification question instead of inventing details.",
@@ -109,6 +113,7 @@ function buildMemorySystemPrompt() {
   return [
     "You summarize prior conversation turns for future grounding.",
     "Return only valid JSON matching the schema.",
+    "Do not wrap the JSON in markdown, code fences, or commentary.",
     "Capture salient facts, open loops, and keywords without embellishment.",
     "Do not invent facts that are not present in the messages.",
   ].join(" ");
@@ -141,102 +146,104 @@ function buildMemoryUserPrompt(request: StructuredMemorySummaryRequest) {
   );
 }
 
-async function fetchGroqStructuredOutput(args: {
-  apiKey: string;
-  model: string;
-  messages: ChatMessage[];
-  jsonSchema: JsonSchemaDefinition;
-}) {
-  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${args.apiKey}`,
-    },
-    body: JSON.stringify({
-      model: args.model,
-      messages: args.messages,
-      temperature: 0.1,
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: args.jsonSchema.name,
-          schema: args.jsonSchema.schema,
-        },
-      },
-    }),
-  });
+function extractJsonObject(text: string) {
+  const trimmed = text.trim();
 
-  if (!response.ok) {
-    throw new Error(`Groq chat completion failed with status ${response.status}.`);
+  if (!trimmed) {
+    throw new Error("Model returned empty content.");
   }
 
-  const payload = (await response.json()) as {
-    choices?: Array<{
-      message?: {
-        content?: string | null;
-      };
-    }>;
-  };
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = fenced ? fenced[1].trim() : trimmed;
+  const firstBrace = candidate.indexOf("{");
+  const lastBrace = candidate.lastIndexOf("}");
 
-  const content = payload.choices?.[0]?.message?.content?.trim();
-
-  if (!content) {
-    throw new Error("Groq chat completion returned empty content.");
+  if (firstBrace === -1 || lastBrace === -1 || lastBrace < firstBrace) {
+    throw new Error("Model did not return a JSON object.");
   }
 
-  return JSON.parse(content) as unknown;
+  return candidate.slice(firstBrace, lastBrace + 1);
 }
 
-async function fetchGitHubModelsStructuredOutput(args: {
-  apiKey: string;
-  baseUrl: string;
+async function fetchOpenRouterStructuredOutput(args: {
+  env: ReturnType<typeof getServerEnv>;
   model: string;
   messages: ChatMessage[];
   jsonSchema: JsonSchemaDefinition;
 }) {
-  const response = await fetch(`${args.baseUrl.replace(/\/$/, "")}/chat/completions`, {
+  const response = await fetch(`${args.env.OPENROUTER_BASE_URL.replace(/\/$/, "")}/chat/completions`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${args.apiKey}`,
+      Authorization: `Bearer ${args.env.OPENROUTER_API_KEY}`,
+      ...(args.env.OPENROUTER_HTTP_REFERER
+        ? {
+            "HTTP-Referer": args.env.OPENROUTER_HTTP_REFERER,
+          }
+        : {}),
+      ...(args.env.OPENROUTER_TITLE
+        ? {
+            "X-OpenRouter-Title": args.env.OPENROUTER_TITLE,
+          }
+        : {}),
     },
     body: JSON.stringify({
       model: args.model,
-      messages: args.messages,
-      temperature: 0.1,
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: args.jsonSchema.name,
-          schema: args.jsonSchema.schema,
+      messages: [
+        ...args.messages,
+        {
+          role: "system",
+          content: [
+            "JSON schema name:",
+            args.jsonSchema.name,
+            "JSON schema:",
+            JSON.stringify(args.jsonSchema.schema),
+          ].join(" "),
         },
-      },
+      ],
+      temperature: 0.1,
+      stream: false,
     }),
   });
 
   if (!response.ok) {
-    throw new Error(`GitHub Models chat completion failed with status ${response.status}.`);
+    throw new Error(`OpenRouter chat completion failed with status ${response.status}.`);
   }
 
   const payload = (await response.json()) as {
     choices?: Array<{
       message?: {
-        content?: string | null;
+        content?: string | Array<{ text?: string }> | null;
       };
     }>;
   };
 
-  const content = payload.choices?.[0]?.message?.content?.trim();
+  const content = payload.choices?.[0]?.message?.content;
 
-  if (!content) {
-    throw new Error("GitHub Models chat completion returned empty content.");
-  }
+  const text =
+    typeof content === "string"
+      ? content
+      : Array.isArray(content)
+        ? content
+            .map((item) => {
+              if (typeof item === "string") {
+                return item;
+              }
 
-  return JSON.parse(content) as unknown;
+              if (item && typeof item === "object" && "text" in item) {
+                return typeof item.text === "string" ? item.text : "";
+              }
+
+              return "";
+            })
+            .join("")
+        : "";
+
+  return JSON.parse(extractJsonObject(text)) as unknown;
 }
 
 async function generateStructuredJson(args: {
+  userId?: string;
   provider: AssistantProvider;
   model: string;
   messages: ChatMessage[];
@@ -244,22 +251,12 @@ async function generateStructuredJson(args: {
 }) {
   const env = getServerEnv();
 
-  if (args.provider === ASSISTANT_PROVIDER.GITHUB_MODELS) {
-    if (!env.GITHUB_MODELS_API_KEY) {
-      throw new Error("GITHUB_MODELS_API_KEY is required when using GitHub Models.");
-    }
-
-    return fetchGitHubModelsStructuredOutput({
-      apiKey: env.GITHUB_MODELS_API_KEY,
-      baseUrl: env.GITHUB_MODELS_BASE_URL,
-      model: args.model,
-      messages: args.messages,
-      jsonSchema: args.jsonSchema,
-    });
+  if (args.provider !== ASSISTANT_PROVIDER.OPENROUTER) {
+    throw new Error(`Unsupported assistant provider: ${args.provider}`);
   }
 
-  return fetchGroqStructuredOutput({
-    apiKey: env.GROQ_API_KEY,
+  return fetchOpenRouterStructuredOutput({
+    env,
     model: args.model,
     messages: args.messages,
     jsonSchema: args.jsonSchema,
@@ -379,11 +376,12 @@ export async function generateStructuredAssistantAction(
     return parseAssistantIntentHeuristically(request.input, request.context);
   }
 
-  const provider = request.provider ?? ASSISTANT_PROVIDER.GROQ;
+  const provider = request.provider ?? ASSISTANT_PROVIDER.OPENROUTER;
   const model = request.model ?? DEFAULT_ASSISTANT_MODEL_BY_PROVIDER[provider];
 
   try {
     const output = await generateStructuredJson({
+      userId: request.userId,
       provider,
       model,
       jsonSchema: getAssistantActionSchema(),
@@ -400,7 +398,14 @@ export async function generateStructuredAssistantAction(
     });
 
     return normalizeAssistantAction(output);
-  } catch {
+  } catch (error) {
+    logWarn("assistant.provider.openrouter-fallback", {
+      provider,
+      model,
+      userId: request.userId,
+      error,
+    });
+
     return parseAssistantIntentHeuristically(request.input, request.context);
   }
 }
@@ -412,11 +417,12 @@ export async function generateStructuredMemorySummary(request: StructuredMemoryS
     return buildFallbackMemorySummary(request);
   }
 
-  const provider = request.provider ?? ASSISTANT_PROVIDER.GROQ;
+  const provider = request.provider ?? ASSISTANT_PROVIDER.OPENROUTER;
   const model = request.model ?? DEFAULT_ASSISTANT_MODEL_BY_PROVIDER[provider];
 
   try {
     const output = await generateStructuredJson({
+      userId: request.userId,
       provider,
       model,
       jsonSchema: getMemorySummarySchema(),
@@ -433,7 +439,14 @@ export async function generateStructuredMemorySummary(request: StructuredMemoryS
     });
 
     return memorySummarySchema.parse(output);
-  } catch {
+  } catch (error) {
+    logWarn("memory.provider.openrouter-fallback", {
+      provider,
+      model,
+      userId: request.userId,
+      error,
+    });
+
     return buildFallbackMemorySummary(request);
   }
 }

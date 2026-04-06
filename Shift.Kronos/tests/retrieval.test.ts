@@ -40,6 +40,10 @@ describe("embedding provider", () => {
     process.env.TELEGRAM_BOT_TOKEN = "telegram_bot_token";
     process.env.GEMINI_API_KEY = "gemini_api_key";
     process.env.GROQ_API_KEY = "groq_api_key";
+    process.env.OPENROUTER_API_KEY = "openrouter_api_key";
+    process.env.OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
+    process.env.OPENROUTER_HTTP_REFERER = "https://shift-kronos.test";
+    process.env.OPENROUTER_TITLE = "Shift:Kronos";
     process.env.PHASE7_CRON_SECRET = "phase7-cron-secret";
     process.env.PHASE7_TELEGRAM_WEBHOOK_SECRET = "phase7-telegram-secret";
 

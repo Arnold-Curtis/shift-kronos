@@ -46,7 +46,7 @@ export function AiSettingsForm({
             ))}
           </select>
           <p className="mt-3 text-sm leading-6 text-foreground-muted">
-            Choose the model backend used for assistant chat, quick capture, and grounded answers.
+            OpenRouter is the assistant backend for chat, quick capture, and grounded answers. The model can be changed later without changing the integration.
           </p>
         </div>
 
@@ -62,7 +62,7 @@ export function AiSettingsForm({
             className="mt-3 w-full rounded-2xl border border-border bg-panel px-4 py-3 text-sm text-foreground outline-none"
           />
           <p className="mt-3 text-sm leading-6 text-foreground-muted">
-            Example models: {assistantOptions.flatMap((option) => option.suggestedModels).join(", ")}.
+            Recommended models: {assistantOptions.flatMap((option) => option.suggestedModels).join(", ")}.
           </p>
         </div>
 

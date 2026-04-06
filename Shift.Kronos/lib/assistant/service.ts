@@ -54,6 +54,7 @@ export async function runAssistantWorkflow(input: AssistantWorkflowInput): Promi
 
   const action = assistantParseResultSchema.parse(
     await generateStructuredAssistantAction({
+      userId: input.userId,
       input: input.input,
       context,
       provider: resolveAssistantProvider(user),

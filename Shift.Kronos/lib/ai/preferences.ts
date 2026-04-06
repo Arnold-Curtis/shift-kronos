@@ -1,8 +1,7 @@
 import { User } from "@prisma/client";
 
 export const ASSISTANT_PROVIDER = {
-  GROQ: "groq",
-  GITHUB_MODELS: "github-models",
+  OPENROUTER: "openrouter",
 } as const;
 
 export const TRANSCRIPTION_PROVIDER = {
@@ -10,8 +9,7 @@ export const TRANSCRIPTION_PROVIDER = {
 } as const;
 
 export const DEFAULT_ASSISTANT_MODEL_BY_PROVIDER = {
-  [ASSISTANT_PROVIDER.GROQ]: "llama-3.3-70b-versatile",
-  [ASSISTANT_PROVIDER.GITHUB_MODELS]: "gpt-4o-mini",
+  [ASSISTANT_PROVIDER.OPENROUTER]: "qwen/qwen3.6-plus:free",
 } as const;
 
 export const DEFAULT_TRANSCRIPTION_MODEL_BY_PROVIDER = {
@@ -22,7 +20,7 @@ export type AssistantProvider = (typeof ASSISTANT_PROVIDER)[keyof typeof ASSISTA
 export type TranscriptionProvider = (typeof TRANSCRIPTION_PROVIDER)[keyof typeof TRANSCRIPTION_PROVIDER];
 
 export function isAssistantProvider(value: string | null | undefined): value is AssistantProvider {
-  return value === ASSISTANT_PROVIDER.GROQ || value === ASSISTANT_PROVIDER.GITHUB_MODELS;
+  return value === ASSISTANT_PROVIDER.OPENROUTER;
 }
 
 export function isTranscriptionProvider(value: string | null | undefined): value is TranscriptionProvider {
@@ -30,7 +28,7 @@ export function isTranscriptionProvider(value: string | null | undefined): value
 }
 
 export function resolveAssistantProvider(user: Pick<User, "assistantProvider"> | null | undefined): AssistantProvider {
-  return isAssistantProvider(user?.assistantProvider) ? user.assistantProvider : ASSISTANT_PROVIDER.GROQ;
+  return isAssistantProvider(user?.assistantProvider) ? user.assistantProvider : ASSISTANT_PROVIDER.OPENROUTER;
 }
 
 export function resolveAssistantModel(user: Pick<User, "assistantProvider" | "assistantModel"> | null | undefined) {
@@ -56,18 +54,15 @@ export function resolveTranscriptionModel(
 export function getAssistantProviderOptions() {
   return [
     {
-      value: ASSISTANT_PROVIDER.GROQ,
-      label: "Groq",
-      description: "Use direct Groq-hosted models with the existing API key boundary.",
-      defaultModel: DEFAULT_ASSISTANT_MODEL_BY_PROVIDER[ASSISTANT_PROVIDER.GROQ],
-      suggestedModels: ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768"],
-    },
-    {
-      value: ASSISTANT_PROVIDER.GITHUB_MODELS,
-      label: "GitHub Models",
-      description: "Use a GitHub-backed model API token and choose a supported chat model.",
-      defaultModel: DEFAULT_ASSISTANT_MODEL_BY_PROVIDER[ASSISTANT_PROVIDER.GITHUB_MODELS],
-      suggestedModels: ["gpt-4o-mini", "gpt-4.1-mini", "Phi-4-mini-instruct"],
+      value: ASSISTANT_PROVIDER.OPENROUTER,
+      label: "OpenRouter",
+      description: "Use OpenRouter as the assistant backend and choose the chat model you want to run.",
+      defaultModel: DEFAULT_ASSISTANT_MODEL_BY_PROVIDER[ASSISTANT_PROVIDER.OPENROUTER],
+      suggestedModels: [
+        "qwen/qwen3.6-plus:free",
+        "qwen/qwen-plus-2025-07-28",
+        "qwen/qwen-plus-2025-07-28:thinking",
+      ],
     },
   ];
 }

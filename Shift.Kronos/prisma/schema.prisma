@@ -75,7 +75,7 @@ model User {
   telegramChatId     String?
   timezone           String           @default("Africa/Lagos")
   displayName        String?
-  assistantProvider  String           @default("groq")
+  assistantProvider  String           @default("openrouter")
   assistantModel     String?
   transcriptionProvider String        @default("groq")
   transcriptionModel String?
