@@ -4,10 +4,12 @@ import { ConversationView } from "@/lib/assistant/types";
 
 type ChatPanelProps = {
   conversations: ConversationView[];
+  selectedConversationId?: string | null;
 };
 
-export function ChatPanel({ conversations }: ChatPanelProps) {
-  const activeConversation = conversations[0] ?? null;
+export function ChatPanel({ conversations, selectedConversationId }: ChatPanelProps) {
+  const activeConversation =
+    conversations.find((conversation) => conversation.id === selectedConversationId) ?? conversations[0] ?? null;
 
   return (
     <div className="grid gap-4 xl:grid-cols-[0.85fr_1.15fr]">

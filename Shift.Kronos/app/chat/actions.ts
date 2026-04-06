@@ -1,5 +1,6 @@
 "use server";
 
+import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { requireCurrentUser } from "@/lib/current-user";
 import { assistantChatInputSchema, assistantQuickCaptureSchema, assistantVoiceInputSchema } from "@/lib/assistant/schemas";
@@ -20,7 +21,7 @@ export async function submitChatMessageAction(formData: FormData) {
 
   const values = result.data;
 
-  await runAssistantWorkflow({
+  const workflowResult = await runAssistantWorkflow({
     userId: user.id,
     input: values.message,
     source: ASSISTANT_INPUT_SOURCE.WEB_CHAT,
@@ -30,6 +31,8 @@ export async function submitChatMessageAction(formData: FormData) {
   revalidatePath("/chat");
   revalidatePath("/");
   revalidatePath("/reminders");
+
+  redirect(`/chat?conversationId=${workflowResult.conversationId ?? values.conversationId ?? ""}`);
 }
 
 export async function submitQuickCaptureAction(
