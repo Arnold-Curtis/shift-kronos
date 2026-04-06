@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { parseAssistantIntentHeuristically } from "@/lib/ai/heuristics";
 import { ASSISTANT_ACTION_TYPE } from "@/lib/assistant/types";
 import { buildFollowUpInput } from "@/lib/assistant/service";
+import { generateStructuredAssistantAction } from "@/lib/ai/providers/text";
 
 const context = {
   timezone: "Africa/Lagos",
@@ -184,6 +185,60 @@ describe("assistant heuristic parsing", () => {
 
     expect(effectiveInput).toContain("Remind me to call mum tomorrow.");
     expect(effectiveInput).toContain("11AM 11am");
+  });
+
+  it("sanitizes oversized clarification payloads instead of crashing schema validation", async () => {
+    process.env.PHASE4_FAKE_AI = "0";
+    process.env.OPENROUTER_API_KEY = "openrouter_api_key";
+    process.env.OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
+    process.env.OPENROUTER_HTTP_REFERER = "https://shift-kronos.test";
+    process.env.OPENROUTER_TITLE = "Shift:Kronos";
+
+    const originalFetch = global.fetch;
+
+    global.fetch = async () =>
+      new Response(
+        JSON.stringify({
+          choices: [
+            {
+              message: {
+                content: JSON.stringify({
+                  type: ASSISTANT_ACTION_TYPE.CLARIFY_MISSING_FIELDS,
+                  clarification: {
+                    missingFields: ["a", "b", "c", "d", "e", "f", "g", "g"],
+                    question: "Need a few more details.",
+                  },
+                }),
+              },
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+          },
+        },
+      ) as Response;
+
+    try {
+      const result = await generateStructuredAssistantAction({
+        input: "Help me schedule this.",
+        context,
+      });
+
+      expect(result.type).toBe(ASSISTANT_ACTION_TYPE.CLARIFY_MISSING_FIELDS);
+
+      if (result.type !== ASSISTANT_ACTION_TYPE.CLARIFY_MISSING_FIELDS) {
+        throw new Error("Expected clarification action.");
+      }
+
+      expect(result.clarification.missingFields).toEqual(["a", "b", "c", "d", "e", "f"]);
+      expect(result.clarification.question).toBe("Need a few more details.");
+    } finally {
+      global.fetch = originalFetch;
+      process.env.PHASE4_FAKE_AI = "1";
+    }
   });
 
   it("requests clarification when reminder timing is missing", () => {

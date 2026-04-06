@@ -574,14 +574,22 @@ function normalizeAssistantAction(output: unknown): AssistantAction {
 
   if (value.type === ASSISTANT_ACTION_TYPE.CLARIFY_MISSING_FIELDS) {
     const clarification = value.clarification as Record<string, unknown> | undefined;
+    const normalizedMissingFields = Array.isArray(clarification?.missingFields)
+      ? clarification.missingFields
+          .map((item) => String(item).trim())
+          .filter((item) => item.length > 0)
+          .filter((item, index, all) => all.indexOf(item) === index)
+          .slice(0, 6)
+      : [];
+    const normalizedQuestion = String(clarification?.question ?? "Can you clarify what you want to do?")
+      .trim()
+      .slice(0, 300);
 
     return {
       type: ASSISTANT_ACTION_TYPE.CLARIFY_MISSING_FIELDS,
       clarification: {
-        missingFields: Array.isArray(clarification?.missingFields)
-          ? clarification.missingFields.map((item) => String(item))
-          : [],
-        question: String(clarification?.question ?? ""),
+        missingFields: normalizedMissingFields.length > 0 ? normalizedMissingFields : ["intent"],
+        question: normalizedQuestion || "Can you clarify what you want to do?",
       },
     };
   }
