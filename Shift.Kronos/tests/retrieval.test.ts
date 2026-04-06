@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildChunkInputs, splitIntoChunks } from "@/lib/retrieval/chunking";
 import { generateEmbedding } from "@/lib/ai/providers/embeddings";
+import { normalizeAssistantModelForProvider } from "@/lib/ai/preferences";
 
 describe("retrieval chunking", () => {
   it("splits long content into deterministic chunks", () => {
@@ -52,5 +53,15 @@ describe("embedding provider", () => {
     expect(result.model).toBe("test-embedding-model");
     expect(result.dimensions).toBe(12);
     expect(result.values).toHaveLength(12);
+  });
+});
+
+describe("assistant model normalization", () => {
+  it("falls back to the OpenRouter default when a legacy Groq model is still saved", () => {
+    expect(normalizeAssistantModelForProvider("openrouter", "llama-3.3-70b-versatile")).toBe("qwen/qwen3.6-plus:free");
+  });
+
+  it("keeps valid OpenRouter model ids intact", () => {
+    expect(normalizeAssistantModelForProvider("openrouter", "qwen/qwen3.6-plus:free")).toBe("qwen/qwen3.6-plus:free");
   });
 });

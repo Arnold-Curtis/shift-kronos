@@ -64,7 +64,8 @@ export async function generateEmbedding(input: string): Promise<EmbeddingResult>
   });
 
   if (!response.ok) {
-    throw new Error(`Embedding provider request failed with status ${response.status}.`);
+    const errorBody = await response.text();
+    throw new Error(`Embedding provider request failed with status ${response.status}: ${errorBody.slice(0, 400)}`);
   }
 
   const payload = (await response.json()) as {

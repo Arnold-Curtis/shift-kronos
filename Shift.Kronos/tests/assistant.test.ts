@@ -154,6 +154,22 @@ describe("assistant heuristic parsing", () => {
     expect(effectiveInput).toBe("Add a reminder for tonight at 9pm to revise.");
   });
 
+  it("still merges short clarification fragments like bare times with the prior request", () => {
+    const effectiveInput = buildFollowUpInput("11am", [
+      {
+        role: "USER",
+        content: "Remind me to call mum tomorrow.",
+      },
+      {
+        role: "ASSISTANT",
+        content: "When should I schedule this reminder? You can say things like tomorrow at 8pm or tonight.",
+      },
+    ]);
+
+    expect(effectiveInput).toContain("Remind me to call mum tomorrow.");
+    expect(effectiveInput).toContain("11am");
+  });
+
   it("requests clarification when reminder timing is missing", () => {
     const result = parseAssistantIntentHeuristically("Remind me to submit the assignment", context);
 

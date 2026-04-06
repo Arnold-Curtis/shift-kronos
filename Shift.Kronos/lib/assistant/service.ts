@@ -8,7 +8,7 @@ import {
   resolveTranscriptionProvider,
 } from "@/lib/ai/preferences";
 import { getAssistantContextForUser } from "@/lib/assistant/context";
-import { appendConversationMessage, ensureConversation } from "@/lib/assistant/conversations";
+import { appendConversationMessage, ensureConversation, getRecentConversationMessages } from "@/lib/assistant/conversations";
 import { assistantParseResultSchema } from "@/lib/assistant/schemas";
 import {
   ASSISTANT_ACTION_TYPE,
@@ -121,6 +121,73 @@ export function buildFollowUpInput(input: string, recentConversation: Array<{ ro
   return `${lastUserMessage.content.trim()} ${normalizedInput}`;
 }
 
+function buildStructuredFollowUpInput(
+  input: string,
+  recentConversation: Array<{
+    role: ConversationMessageRole;
+    content: string;
+    structuredData: unknown;
+  }>,
+) {
+  const normalizedInput = input.trim();
+
+  if (!normalizedInput) {
+    return input;
+  }
+
+  const recent = [...recentConversation];
+  const lastAssistantClarification = recent.find((message) => {
+    if (message.role !== ConversationMessageRole.ASSISTANT || !message.structuredData || typeof message.structuredData !== "object") {
+      return false;
+    }
+
+    const candidate = message.structuredData as Record<string, unknown>;
+    return candidate.type === ASSISTANT_ACTION_TYPE.CLARIFY_MISSING_FIELDS;
+  });
+
+  if (!lastAssistantClarification) {
+    return buildFollowUpInput(input, recentConversation.map((message) => ({ role: message.role, content: message.content })));
+  }
+
+  const clarification = (lastAssistantClarification.structuredData as Record<string, unknown>).clarification as Record<string, unknown> | undefined;
+  const missingFields = Array.isArray(clarification?.missingFields)
+    ? clarification.missingFields.map((item) => String(item))
+    : [];
+
+  const lastUserMessage = recent.find((message) => message.role === ConversationMessageRole.USER);
+
+  if (!lastUserMessage) {
+    return input;
+  }
+
+  const lower = normalizedInput.toLowerCase();
+  const isStandaloneIntent =
+    lower.startsWith("remind me") ||
+    lower.startsWith("add a reminder") ||
+    lower.startsWith("set a reminder") ||
+    lower.startsWith("set reminder") ||
+    lower.startsWith("add reminder") ||
+    lower.startsWith("create reminder") ||
+    lower.startsWith("add a timetable entry") ||
+    lower.startsWith("add timetable entry") ||
+    lower.startsWith("add a class") ||
+    lower.startsWith("add class") ||
+    lower.startsWith("schedule a class") ||
+    lower.startsWith("what ") ||
+    lower.startsWith("do ") ||
+    lower.startsWith("can ");
+
+  if (isStandaloneIntent) {
+    return input;
+  }
+
+  if (missingFields.length === 0) {
+    return `${lastUserMessage.content.trim()} ${normalizedInput}`;
+  }
+
+  return `${lastUserMessage.content.trim()} ${normalizedInput}`;
+}
+
 export async function runAssistantWorkflow(input: AssistantWorkflowInput): Promise<AssistantWorkflowResult> {
   const now = input.now ?? new Date();
   const user = await db.user.findUniqueOrThrow({
@@ -133,8 +200,9 @@ export async function runAssistantWorkflow(input: AssistantWorkflowInput): Promi
     },
   });
   const conversation = await ensureConversation(input.userId, input.source, input.conversationId);
-  const context = await getAssistantContextForUser(input.userId, now, input.input, conversation.id);
-  const effectiveInput = buildFollowUpInput(input.input, context.recentConversation);
+  const recentMessages = await getRecentConversationMessages(conversation.id, 12);
+  const effectiveInput = buildStructuredFollowUpInput(input.input, recentMessages);
+  const context = await getAssistantContextForUser(input.userId, now, effectiveInput, conversation.id);
 
   await appendConversationMessage(conversation.id, ConversationMessageRole.USER, input.input, {
     source: input.source,

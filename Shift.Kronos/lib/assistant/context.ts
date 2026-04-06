@@ -10,6 +10,24 @@ import { logWarn } from "@/lib/observability/logger";
 import { MemoryHighlight } from "@/lib/memory/types";
 import { RetrievalMatch } from "@/lib/retrieval/types";
 
+function shouldSkipSemanticRetrieval(query: string | null | undefined) {
+  const normalized = query?.trim().toLowerCase();
+
+  if (!normalized) {
+    return true;
+  }
+
+  if (normalized.length <= 20 && /^\d{1,2}(?::\d{2})?\s*(a\.?m\.?|p\.?m\.?)$/i.test(normalized)) {
+    return true;
+  }
+
+  if (normalized.length <= 40 && /^(it|it starts|it ends|starts|ends)\b/i.test(normalized)) {
+    return true;
+  }
+
+  return false;
+}
+
 export async function getAssistantContextForUser(
   userId: string,
   now: Date = new Date(),
@@ -35,7 +53,7 @@ export async function getAssistantContextForUser(
   let knowledgeHighlights: RetrievalMatch[] = [];
   let memoryHighlights: MemoryHighlight[] = [];
 
-  if (query?.trim()) {
+  if (query?.trim() && !shouldSkipSemanticRetrieval(query)) {
     try {
       knowledgeHighlights = await runSemanticRetrieval({
         userId,

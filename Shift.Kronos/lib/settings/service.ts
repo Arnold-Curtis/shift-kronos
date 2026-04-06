@@ -1,9 +1,16 @@
 import { db } from "@/lib/db";
-import { resolveAssistantModel, resolveAssistantProvider, resolveTranscriptionModel, resolveTranscriptionProvider } from "@/lib/ai/preferences";
+import {
+  normalizeAssistantModelForProvider,
+  resolveAssistantModel,
+  resolveAssistantProvider,
+  resolveTranscriptionModel,
+  resolveTranscriptionProvider,
+} from "@/lib/ai/preferences";
 import { UserAiSettingsInput, userAiSettingsSchema } from "@/lib/settings/schemas";
 
 export async function updateUserAiSettings(userId: string, input: UserAiSettingsInput) {
   const values = userAiSettingsSchema.parse(input);
+  const normalizedAssistantModel = normalizeAssistantModelForProvider(values.assistantProvider, values.assistantModel);
 
   return db.user.update({
     where: {
@@ -11,7 +18,7 @@ export async function updateUserAiSettings(userId: string, input: UserAiSettings
     },
     data: {
       assistantProvider: values.assistantProvider,
-      assistantModel: values.assistantModel,
+      assistantModel: normalizedAssistantModel,
       transcriptionProvider: values.transcriptionProvider,
       transcriptionModel: values.transcriptionModel,
     },

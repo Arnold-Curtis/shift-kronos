@@ -19,6 +19,35 @@ export const DEFAULT_TRANSCRIPTION_MODEL_BY_PROVIDER = {
 export type AssistantProvider = (typeof ASSISTANT_PROVIDER)[keyof typeof ASSISTANT_PROVIDER];
 export type TranscriptionProvider = (typeof TRANSCRIPTION_PROVIDER)[keyof typeof TRANSCRIPTION_PROVIDER];
 
+function normalizeAssistantModelValue(value: string | null | undefined) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
+export function isLikelyOpenRouterModel(value: string | null | undefined) {
+  const model = normalizeAssistantModelValue(value);
+
+  if (!model) {
+    return false;
+  }
+
+  return model.includes("/");
+}
+
+export function normalizeAssistantModelForProvider(provider: AssistantProvider, value: string | null | undefined) {
+  const model = normalizeAssistantModelValue(value);
+
+  if (!model) {
+    return DEFAULT_ASSISTANT_MODEL_BY_PROVIDER[provider];
+  }
+
+  if (provider === ASSISTANT_PROVIDER.OPENROUTER && !isLikelyOpenRouterModel(model)) {
+    return DEFAULT_ASSISTANT_MODEL_BY_PROVIDER[provider];
+  }
+
+  return model;
+}
+
 export function isAssistantProvider(value: string | null | undefined): value is AssistantProvider {
   return value === ASSISTANT_PROVIDER.OPENROUTER;
 }
@@ -33,8 +62,7 @@ export function resolveAssistantProvider(user: Pick<User, "assistantProvider"> |
 
 export function resolveAssistantModel(user: Pick<User, "assistantProvider" | "assistantModel"> | null | undefined) {
   const provider = resolveAssistantProvider(user);
-  const model = user?.assistantModel?.trim();
-  return model || DEFAULT_ASSISTANT_MODEL_BY_PROVIDER[provider];
+  return normalizeAssistantModelForProvider(provider, user?.assistantModel);
 }
 
 export function resolveTranscriptionProvider(user: Pick<User, "transcriptionProvider"> | null | undefined): TranscriptionProvider {

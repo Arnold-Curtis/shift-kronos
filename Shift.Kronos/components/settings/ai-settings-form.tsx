@@ -26,6 +26,9 @@ export function AiSettingsForm({
   currentTranscriptionProvider,
   currentTranscriptionModel,
 }: AiSettingsFormProps) {
+  const assistantModelLooksLegacy =
+    currentAssistantProvider === "openrouter" && Boolean(currentAssistantModel) && !currentAssistantModel.includes("/");
+
   return (
     <form action={updateUserAiSettingsAction} className="grid gap-4">
       <div className="grid gap-4 md:grid-cols-2">
@@ -64,6 +67,11 @@ export function AiSettingsForm({
           <p className="mt-3 text-sm leading-6 text-foreground-muted">
             Recommended models: {assistantOptions.flatMap((option) => option.suggestedModels).join(", ")}.
           </p>
+          {assistantModelLooksLegacy ? (
+            <p className="mt-3 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm leading-6 text-amber-100">
+              The saved assistant model looks like a legacy non-OpenRouter id. Saving settings will reset it to a compatible OpenRouter model automatically.
+            </p>
+          ) : null}
         </div>
 
         <div className="rounded-2xl border border-border bg-black/10 px-4 py-4">

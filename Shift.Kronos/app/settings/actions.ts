@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireCurrentUser } from "@/lib/current-user";
+import { normalizeAssistantModelForProvider } from "@/lib/ai/preferences";
 import { updateUserAiSettings } from "@/lib/settings/service";
 import { userAiSettingsSchema } from "@/lib/settings/schemas";
 
@@ -19,7 +20,15 @@ export async function updateUserAiSettingsAction(formData: FormData) {
     return;
   }
 
-  await updateUserAiSettings(user.id, result.data);
+  const normalizedAssistantModel = normalizeAssistantModelForProvider(
+    result.data.assistantProvider,
+    result.data.assistantModel,
+  );
+
+  await updateUserAiSettings(user.id, {
+    ...result.data,
+    assistantModel: normalizedAssistantModel,
+  });
 
   revalidatePath("/");
   revalidatePath("/chat");
