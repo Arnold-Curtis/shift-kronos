@@ -141,6 +141,20 @@ describe("telegram callback payloads", () => {
 
     expect(decoded).toEqual(payload);
   });
+
+  it("encodes timetable callbacks within Telegram callback_data limits", () => {
+    const payload = {
+      version: "v1" as const,
+      action: TELEGRAM_ACTIONS.ACK_TIMETABLE,
+      timetableEntryId: "class_1234567890abcdef",
+    };
+
+    const encoded = encodeTelegramCallbackPayload(payload);
+    const decoded = decodeTelegramCallbackPayload(encoded);
+
+    expect(encoded.length).toBeLessThanOrEqual(64);
+    expect(decoded).toEqual(payload);
+  });
 });
 
 describe("telegram message formatting", () => {
@@ -218,5 +232,6 @@ describe("telegram message formatting", () => {
 
     expect(message.text).toContain("Class alert: Operating Systems");
     expect(message.inlineKeyboard?.[0]?.[0]?.text).toBe("Acknowledge");
+    expect(message.inlineKeyboard?.[0]?.[0]?.callbackData.length).toBeLessThanOrEqual(64);
   });
 });

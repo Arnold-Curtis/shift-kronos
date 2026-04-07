@@ -9,6 +9,7 @@ export const userAiSettingsSchema = z.object({
   assistantModel: z.string().trim().min(1).max(120),
   transcriptionProvider: z.enum([TRANSCRIPTION_PROVIDER.GROQ]),
   transcriptionModel: z.string().trim().min(1).max(120),
+  voiceResponseEnabled: z.boolean().optional(),
 });
 
 export type UserAiSettingsInput = z.infer<typeof userAiSettingsSchema>;

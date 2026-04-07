@@ -16,6 +16,7 @@ type AiSettingsFormProps = {
   currentAssistantModel: string;
   currentTranscriptionProvider: string;
   currentTranscriptionModel: string;
+  currentVoiceResponseEnabled?: boolean;
 };
 
 export function AiSettingsForm({
@@ -25,6 +26,7 @@ export function AiSettingsForm({
   currentAssistantModel,
   currentTranscriptionProvider,
   currentTranscriptionModel,
+  currentVoiceResponseEnabled = true,
 }: AiSettingsFormProps) {
   return (
     <form action={updateUserAiSettingsAction} className="space-y-4">
@@ -79,6 +81,23 @@ export function AiSettingsForm({
             defaultValue={currentTranscriptionModel}
             required
             className="input-field"
+          />
+        </label>
+      </div>
+
+      <div className="border-t border-border-subtle pt-4">
+        <label className="flex items-center justify-between space-y-0">
+          <div className="space-y-0.5">
+            <span className="text-sm font-medium text-text-primary">Voice responses</span>
+            <p className="text-xs text-text-tertiary">
+              Speak responses back after voice input
+            </p>
+          </div>
+          <input
+            type="checkbox"
+            name="voiceResponseEnabled"
+            defaultChecked={currentVoiceResponseEnabled}
+            className="toggle"
           />
         </label>
       </div>

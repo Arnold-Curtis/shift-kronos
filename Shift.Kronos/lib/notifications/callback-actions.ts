@@ -38,5 +38,5 @@ export async function handleTelegramCallbackAction(telegramChatId: string | null
     return snoozeReminderFromNotification(user.id, payload.reminderId, payload.minutes);
   }
 
-  return acknowledgeTimetableNotification(user.id, payload.timetableEntryId, payload.occurrenceKey);
+  return acknowledgeTimetableNotification(user.id, payload.timetableEntryId, payload.occurrenceKey ?? null);
 }

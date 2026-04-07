@@ -460,13 +460,21 @@ export async function snoozeReminderFromNotification(userId: string, reminderId:
   } satisfies TelegramCallbackActionResult;
 }
 
-export async function acknowledgeTimetableNotification(userId: string, timetableEntryId: string, occurrenceKey: string) {
+export async function acknowledgeTimetableNotification(
+  userId: string,
+  timetableEntryId: string,
+  occurrenceKey: string | null,
+) {
   const event = await db.notificationEvent.findFirst({
     where: {
       userId,
       timetableEntryId,
-      sourceOccurrenceKey: occurrenceKey,
       sourceType: NotificationSourceType.TIMETABLE,
+      ...(occurrenceKey
+        ? {
+            sourceOccurrenceKey: occurrenceKey,
+          }
+        : {}),
     },
     orderBy: {
       createdAt: "desc",

@@ -16,6 +16,7 @@ export async function updateUserAiSettingsAction(formData: FormData) {
     assistantModel: String(formData.get("assistantModel") ?? ""),
     transcriptionProvider: String(formData.get("transcriptionProvider") ?? ""),
     transcriptionModel: String(formData.get("transcriptionModel") ?? ""),
+    voiceResponseEnabled: formData.get("voiceResponseEnabled") === "on",
   });
 
   if (!result.success) {

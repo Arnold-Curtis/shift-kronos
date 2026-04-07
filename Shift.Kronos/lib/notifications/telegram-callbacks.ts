@@ -27,7 +27,7 @@ const ackTimetablePayloadSchema = z.object({
   version: z.literal(TELEGRAM_CALLBACK_VERSION),
   action: z.literal(TELEGRAM_ACTIONS.ACK_TIMETABLE),
   timetableEntryId: z.string().min(1),
-  occurrenceKey: z.string().min(1),
+  occurrenceKey: z.string().min(1).optional(),
 });
 
 const callbackPayloadSchema = z.discriminatedUnion("action", [
@@ -36,11 +36,44 @@ const callbackPayloadSchema = z.discriminatedUnion("action", [
   ackTimetablePayloadSchema,
 ]);
 
+const compactAckPrefix = "tta:";
+
+function encodeCompactAckPayload(payload: Extract<TelegramCallbackPayload, { action: typeof TELEGRAM_ACTIONS.ACK_TIMETABLE }>) {
+  return `${compactAckPrefix}${payload.timetableEntryId}`;
+}
+
+function decodeCompactAckPayload(value: string): TelegramCallbackPayload | null {
+  if (!value.startsWith(compactAckPrefix)) {
+    return null;
+  }
+
+  const body = value.slice(compactAckPrefix.length);
+  if (!body) {
+    throw new Error("Invalid compact timetable callback payload.");
+  }
+
+  return ackTimetablePayloadSchema.parse({
+    version: TELEGRAM_CALLBACK_VERSION,
+    action: TELEGRAM_ACTIONS.ACK_TIMETABLE,
+    timetableEntryId: body,
+  }) as TelegramCallbackPayload;
+}
+
 export function encodeTelegramCallbackPayload(payload: TelegramCallbackPayload) {
+  if (payload.action === TELEGRAM_ACTIONS.ACK_TIMETABLE) {
+    return encodeCompactAckPayload(payload);
+  }
+
   return JSON.stringify(payload);
 }
 
 export function decodeTelegramCallbackPayload(value: string) {
+  const compactAckPayload = decodeCompactAckPayload(value);
+
+  if (compactAckPayload) {
+    return compactAckPayload;
+  }
+
   return callbackPayloadSchema.parse(JSON.parse(value)) as TelegramCallbackPayload;
 }
 

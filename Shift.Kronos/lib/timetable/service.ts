@@ -170,3 +170,58 @@ export async function getTimetableCollections(userId: string, now: Date = new Da
     upcoming: upcomingWindow.length > 0 ? upcomingWindow : upcoming,
   };
 }
+
+export async function updateTimetableEntry(
+  userId: string,
+  entryId: string,
+  updates: {
+    subject?: string;
+    startTime?: string;
+    endTime?: string;
+    location?: string;
+    lecturer?: string;
+  },
+) {
+  const existing = await db.timetableEntry.findFirst({
+    where: {
+      id: entryId,
+      userId,
+    },
+  });
+
+  if (!existing) {
+    throw new Error("Timetable entry not found.");
+  }
+
+  return db.timetableEntry.update({
+    where: {
+      id: entryId,
+    },
+    data: {
+      subject: updates.subject ?? existing.subject,
+      startTime: updates.startTime ?? existing.startTime,
+      endTime: updates.endTime ?? existing.endTime,
+      location: updates.location !== undefined ? updates.location : existing.location,
+      lecturer: updates.lecturer !== undefined ? updates.lecturer : existing.lecturer,
+    },
+  });
+}
+
+export async function deleteTimetableEntry(userId: string, entryId: string) {
+  const existing = await db.timetableEntry.findFirst({
+    where: {
+      id: entryId,
+      userId,
+    },
+  });
+
+  if (!existing) {
+    throw new Error("Timetable entry not found.");
+  }
+
+  return db.timetableEntry.delete({
+    where: {
+      id: entryId,
+    },
+  });
+}

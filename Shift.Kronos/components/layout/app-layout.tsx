@@ -1,10 +1,11 @@
-"use client";
-
 import { BottomTabBar } from "@/components/layout/bottom-tab-bar";
 import { SidebarNav } from "@/components/layout/sidebar-nav";
 import { VoiceFab } from "@/components/capture/voice-fab";
+import { requireCurrentUser } from "@/lib/current-user";
 
-export function AppLayout({ children }: { children: React.ReactNode }) {
+export async function AppLayout({ children }: { children: React.ReactNode }) {
+  const user = await requireCurrentUser();
+
   return (
     <>
       <SidebarNav />
@@ -13,7 +14,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           {children}
         </main>
       </div>
-      <VoiceFab />
+      <VoiceFab voiceResponseEnabled={user.voiceResponseEnabled} />
       <BottomTabBar />
     </>
   );

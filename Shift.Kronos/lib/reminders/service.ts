@@ -253,3 +253,22 @@ export function getReminderRecurrencePayload(input: CreateReminderInput | Update
     recurrenceEndAt: input.recurrence.endAt ?? null,
   };
 }
+
+export async function deleteReminder(userId: string, reminderId: string) {
+  const existing = await db.reminder.findFirst({
+    where: {
+      id: reminderId,
+      userId,
+    },
+  });
+
+  if (!existing) {
+    throw new Error("Reminder not found.");
+  }
+
+  return db.reminder.delete({
+    where: {
+      id: reminderId,
+    },
+  });
+}

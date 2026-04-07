@@ -88,8 +88,21 @@ function serializeContext(context: AssistantContext) {
       ...item,
       startsAt: item.startsAt.toISOString(),
     })),
+    timetableEntries: context.timetableEntries?.map((item) => ({
+      ...item,
+      semesterStart: item.semesterStart?.toISOString(),
+      semesterEnd: item.semesterEnd?.toISOString(),
+    })),
+    semesterContext: context.semesterContext ? {
+      semesterStart: context.semesterContext.semesterStart?.toISOString(),
+      semesterEnd: context.semesterContext.semesterEnd?.toISOString(),
+    } : null,
     knowledgeHighlights: context.knowledgeHighlights,
     memoryHighlights: context.memoryHighlights,
+    recentMemoryArtifacts: context.recentMemoryArtifacts?.map((item) => ({
+      ...item,
+      createdAt: item.createdAt.toISOString(),
+    })),
     recentConversation: context.recentConversation.map((item) => ({
       ...item,
       createdAt: item.createdAt.toISOString(),
@@ -97,19 +110,122 @@ function serializeContext(context: AssistantContext) {
   };
 }
 
-function buildAssistantSystemPrompt() {
-  return [
-    "You are Shift:Kronos assistant.",
-    "Return only valid JSON matching the requested schema.",
-    "Do not wrap the JSON in markdown, code fences, or commentary.",
-    "You must stay deterministic at the mutation boundary.",
-    "Create reminders or timetable entries only when the user intent is clear enough.",
-    "If required fields are missing, ask a clarification question instead of inventing details.",
-    "Timetable entries are recurring semester classes, not one-time reminders.",
-    "Never invent timetable end times or semester bounds when the user has not provided them.",
-    "If the user asks about schedule, notes, files, or memory, answer grounded only in provided context.",
-    "Never mention provider details or reasoning steps.",
-  ].join(" ");
+function buildAssistantSystemPrompt(): string {
+  return `You are Shift:Kronos, an intelligent personal assistant that helps users manage reminders, notes, timetable entries, and memory.
+
+## CRITICAL RULES
+
+1. OUTPUT FORMAT: Return ONLY valid JSON matching the schema. No markdown, no code fences, no commentary.
+2. DETERMINISTIC BOUNDARY: You must stay deterministic at the mutation boundary. Never invent details not provided by the user.
+
+## DECISION RULES
+
+### Entity Type Inference
+
+Analyze the user's intent to determine the correct entity type:
+
+| User Phrasing | Entity Type | Reasoning |
+|---------------|-------------|-----------|
+| "remind me to..." | REMINDER | Explicit reminder request |
+| "I have a meeting at 3pm" | REMINDER | One-time event, no recurrence |
+| "I have a class every Monday" | TIMETABLE_ENTRY | Recurring weekly pattern |
+| "note that..." / "remember that..." | NOTE | Explicit note request |
+| "my class changed..." | UPDATE_TIMETABLE_ENTRY | Modification request |
+| "what class do I have..." | SEARCH_MEMORY | Query, not creation |
+| "what did I say about..." | SEARCH_MEMORY | Memory recall query |
+
+### Time Inference
+
+When time is given but date is missing, infer the most logical next occurrence:
+
+- If current time is BEFORE the given time today → schedule for today
+- If current time is AFTER the given time today → schedule for tomorrow
+- For timetable entries, use semester context from existing entries
+
+Examples:
+- Now: Monday 1pm, Input: "at 3pm" → Today (Monday) 3pm
+- Now: Monday 4pm, Input: "at 3pm" → Tomorrow (Tuesday) 3pm
+- Now: Friday 10am, Input: "on Monday at 8am" → Next Monday 8am
+
+### Semester Inference
+
+For timetable entries without explicit semester bounds:
+1. Check existing timetable entries for semester dates
+2. If found, use the same semester range
+3. If no entries exist, assume current semester (current month to +4 months)
+
+### Query vs Creation Detection
+
+| Pattern | Action | Notes |
+|---------|--------|-------|
+| "what class do I have..." | SEARCH_MEMORY | Query existing data |
+| "what's due..." | SEARCH_MEMORY | Query reminders |
+| "what did I say about..." | SEARCH_MEMORY | Memory recall |
+| "remind me to..." | CREATE_REMINDER | Creation |
+| "add a reminder" | CREATE_REMINDER | Creation |
+| "I have a meeting" | CREATE_REMINDER | Implicit creation |
+| "note that..." | CREATE_NOTE | Note creation |
+
+### Ambiguity Handling
+
+- If truly ambiguous, pick the most likely option and mention alternatives in the response
+- Use DISAMBIGUATE action only for high-impact decisions:
+  - Deleting multiple items
+  - Conflicting interpretations with equal probability
+  - Actions that cannot be easily undone
+
+## RESPONSE GUIDELINES
+
+1. For creations: Brief confirmation + offer follow-up actions
+2. For queries: Direct answer + source evidence + offer related actions
+3. For updates: Confirmation of what changed
+4. For deletions: Require confirmation if impact is high
+
+## CONTEXT USAGE
+
+You will receive context including:
+- Current time and timezone
+- Recent reminders (last 12 scheduled)
+- Upcoming classes (next 8 occurrences)
+- Memory highlights from semantic search
+- Recent conversation history
+
+Use this context to:
+- Resolve relative time references ("tomorrow", "next Monday")
+- Infer missing details from patterns
+- Provide accurate query responses
+- Maintain conversation continuity
+
+## EXAMPLES
+
+### Example 1: One-time reminder
+Input: "I have a meeting at 3pm"
+Context: { now: "2024-04-08T13:00:00Z" }
+Output: { "type": "create_reminder", "confidence": "high", "reminder": { "title": "Meeting", "type": "ONE_TIME", "priority": "MEDIUM", "dueAt": "2024-04-08T15:00:00Z" } }
+
+### Example 2: Note with memory
+Input: "Note that I need to make breakfast in the morning"
+Output: { "type": "create_note", "confidence": "high", "note": { "title": "Morning breakfast routine", "content": "I need to make breakfast in the morning", "tags": ["routine", "morning"] }, "alsoCreateMemory": true }
+
+### Example 3: Timetable query
+Input: "What class do I have tomorrow at 8am?"
+Context: { now: "2024-04-08T10:00:00Z", upcomingClasses: [{ subject: "Business Communications", dayOfWeek: 2, startTime: "08:00" }] }
+Output: { "type": "search_memory", "query": "class tomorrow 8am", "target": "SCHEDULE", "timeContext": { "date": "2024-04-09", "timeRange": { "start": "08:00", "end": "09:00" } } }
+
+### Example 4: Timetable update
+Input: "My Monday 8am class changed from Biology to Chemistry"
+Context: { timetableEntries: [{ id: "abc123", subject: "Biology", dayOfWeek: 1, startTime: "08:00" }] }
+Output: { "type": "update_timetable_entry", "confidence": "high", "entryId": "abc123", "updates": { "subject": "Chemistry" } }
+
+### Example 5: Ambiguous input with best guess
+Input: "Add a reminder to pick up my shoes at 8am"
+Context: { now: "2024-04-08T10:00:00Z" }
+Output: { "type": "create_reminder", "confidence": "high", "reminder": { "title": "Pick up my shoes", "type": "ONE_TIME", "priority": "MEDIUM", "dueAt": "2024-04-09T08:00:00Z" } }
+
+### Example 6: Memory recall
+Input: "What did I say about breakfast?"
+Context: { memoryHighlights: [{ content: "User wants to make breakfast in the morning", title: "Morning routine" }] }
+Output: { "type": "search_memory", "query": "breakfast", "target": "MEMORY", "answer": { "summary": "You mentioned wanting to make breakfast in the morning.", "evidence": ["Memory: Morning breakfast routine"], "sources": [{ "type": "MEMORY", "id": "mem123", "title": "Morning routine" }] } }`;
 }
 
 function buildMemorySystemPrompt() {
@@ -288,13 +404,13 @@ function getAssistantActionSchema(): JsonSchemaDefinition {
         },
         confidence: {
           type: "string",
-          enum: ["high", "medium"],
+          enum: ["high", "medium", "low"],
         },
         reminder: {
           type: "object",
           additionalProperties: false,
           properties: {
-            title: { type: "string" },
+            title: { type: "string", maxLength: 160 },
             description: { type: "string" },
             type: { type: "string", enum: ["ONE_TIME", "RECURRING", "HABIT", "COUNTDOWN", "INBOX"] },
             priority: { type: "string", enum: ["LOW", "MEDIUM", "HIGH"] },
@@ -303,7 +419,7 @@ function getAssistantActionSchema(): JsonSchemaDefinition {
               type: "array",
               items: { type: "string" },
             },
-            dueAt: { type: "string" },
+            dueAt: { type: "string", format: "date-time" },
             recurrence: {
               type: "object",
               additionalProperties: false,
@@ -314,28 +430,75 @@ function getAssistantActionSchema(): JsonSchemaDefinition {
                   type: "array",
                   items: { type: "number" },
                 },
-                endAt: { type: "string" },
+                endAt: { type: "string", format: "date-time" },
               },
               required: ["frequency", "interval", "daysOfWeek"],
             },
           },
           required: ["title", "type", "priority", "tags"],
         },
+        note: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            title: { type: "string", maxLength: 160 },
+            content: { type: "string" },
+            tags: {
+              type: "array",
+              items: { type: "string" },
+            },
+          },
+          required: ["title", "content"],
+        },
+        alsoCreateMemory: { type: "boolean" },
         timetableEntry: {
           type: "object",
           additionalProperties: false,
           properties: {
-            subject: { type: "string" },
+            subject: { type: "string", maxLength: 160 },
             location: { type: "string" },
             lecturer: { type: "string" },
-            dayOfWeek: { type: "number" },
-            startTime: { type: "string" },
-            endTime: { type: "string" },
-            semesterStart: { type: "string" },
-            semesterEnd: { type: "string" },
+            dayOfWeek: { type: "number", minimum: 1, maximum: 7 },
+            startTime: { type: "string", pattern: "^\\d{2}:\\d{2}$" },
+            endTime: { type: "string", pattern: "^\\d{2}:\\d{2}$" },
+            semesterStart: { type: "string", format: "date-time" },
+            semesterEnd: { type: "string", format: "date-time" },
             reminderLeadMinutes: { type: "number" },
           },
           required: ["subject"],
+        },
+        entryId: { type: "string" },
+        updates: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            subject: { type: "string" },
+            startTime: { type: "string" },
+            endTime: { type: "string" },
+            location: { type: "string" },
+            lecturer: { type: "string" },
+          },
+        },
+        entityType: { type: "string", enum: ["REMINDER", "NOTE", "TIMETABLE_ENTRY"] },
+        entityId: { type: "string" },
+        requiresConfirmation: { type: "boolean" },
+        query: { type: "string" },
+        target: { type: "string", enum: ["SCHEDULE", "MEMORY", "REMINDERS", "NOTES", "ALL"] },
+        timeContext: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            date: { type: "string", format: "date" },
+            dayOfWeek: { type: "number" },
+            timeRange: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                start: { type: "string" },
+                end: { type: "string" },
+              },
+            },
+          },
         },
         answer: {
           type: "object",
@@ -346,9 +509,35 @@ function getAssistantActionSchema(): JsonSchemaDefinition {
               type: "array",
               items: { type: "string" },
             },
+            sources: {
+              type: "array",
+              items: {
+                type: "object",
+                additionalProperties: false,
+                properties: {
+                  type: { type: "string" },
+                  id: { type: "string" },
+                  title: { type: "string" },
+                },
+              },
+            },
           },
           required: ["summary", "evidence"],
         },
+        options: {
+          type: "array",
+          items: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              label: { type: "string" },
+              action: { type: "object" },
+              description: { type: "string" },
+            },
+            required: ["label", "action", "description"],
+          },
+        },
+        defaultOption: { type: "number" },
         clarification: {
           type: "object",
           additionalProperties: false,
@@ -398,35 +587,36 @@ function getMemorySummarySchema(): JsonSchemaDefinition {
 export async function generateStructuredAssistantAction(
   request: StructuredAssistantRequest,
 ): Promise<AssistantAction> {
-  const env = getServerEnv();
-
-  if (env.PHASE4_FAKE_AI === "1") {
-    return parseAssistantIntentHeuristically(request.input, request.context);
-  }
-
   const provider = request.provider ?? ASSISTANT_PROVIDER.OPENROUTER;
   const model = request.model ?? DEFAULT_ASSISTANT_MODEL_BY_PROVIDER[provider];
   const candidateModels = getAssistantFallbackModels(model);
   let lastError: unknown = null;
 
+  const LLM_TIMEOUT_MS = 15000; // 15 seconds
+
   for (const candidateModel of candidateModels) {
     try {
-      const output = await generateStructuredJson({
-        userId: request.userId,
-        provider,
-        model: candidateModel,
-        jsonSchema: getAssistantActionSchema(),
-        messages: [
-          {
-            role: "system",
-            content: buildAssistantSystemPrompt(),
-          },
-          {
-            role: "user",
-            content: buildAssistantUserPrompt(request),
-          },
-        ],
-      });
+      const output = await Promise.race([
+        generateStructuredJson({
+          userId: request.userId,
+          provider,
+          model: candidateModel,
+          jsonSchema: getAssistantActionSchema(),
+          messages: [
+            {
+              role: "system",
+              content: buildAssistantSystemPrompt(),
+            },
+            {
+              role: "user",
+              content: buildAssistantUserPrompt(request),
+            },
+          ],
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("LLM request timeout")), LLM_TIMEOUT_MS)
+        ),
+      ]);
 
       return normalizeAssistantAction(output);
     } catch (error) {
@@ -436,16 +626,16 @@ export async function generateStructuredAssistantAction(
         provider,
         model: candidateModel,
         userId: request.userId,
-        error,
+        error: error instanceof Error ? error.message : String(error),
       });
     }
   }
 
-  logWarn("assistant.provider.openrouter-fallback", {
+  logWarn("assistant.provider.openrouter-fallback-heuristics", {
     provider,
     model,
     userId: request.userId,
-    error: lastError,
+    error: lastError instanceof Error ? lastError.message : String(lastError),
   });
 
   return parseAssistantIntentHeuristically(request.input, request.context);
@@ -504,7 +694,7 @@ function normalizeAssistantAction(output: unknown): AssistantAction {
 
     return {
       type: ASSISTANT_ACTION_TYPE.CREATE_REMINDER,
-      confidence: value.confidence === "medium" ? "medium" : "high",
+      confidence: normalizeConfidence(value.confidence),
       reminder: {
         title: String(reminder?.title ?? ""),
         description: typeof reminder?.description === "string" ? reminder.description : undefined,
@@ -531,6 +721,98 @@ function normalizeAssistantAction(output: unknown): AssistantAction {
     };
   }
 
+  if (value.type === ASSISTANT_ACTION_TYPE.CREATE_NOTE) {
+    const note = value.note as Record<string, unknown> | undefined;
+
+    return {
+      type: ASSISTANT_ACTION_TYPE.CREATE_NOTE,
+      confidence: normalizeConfidence(value.confidence),
+      alsoCreateMemory: Boolean(value.alsoCreateMemory),
+      note: {
+        title: String(note?.title ?? ""),
+        content: String(note?.content ?? ""),
+        tags: Array.isArray(note?.tags) ? note.tags.map((item) => String(item)) : undefined,
+      },
+    };
+  }
+
+  if (value.type === ASSISTANT_ACTION_TYPE.UPDATE_TIMETABLE_ENTRY) {
+    const updates = value.updates as Record<string, unknown> | undefined;
+
+    return {
+      type: ASSISTANT_ACTION_TYPE.UPDATE_TIMETABLE_ENTRY,
+      confidence: normalizeConfidence(value.confidence),
+      entryId: String(value.entryId ?? ""),
+      updates: {
+        subject: typeof updates?.subject === "string" ? updates.subject : undefined,
+        startTime: typeof updates?.startTime === "string" ? updates.startTime : undefined,
+        endTime: typeof updates?.endTime === "string" ? updates.endTime : undefined,
+        location: typeof updates?.location === "string" ? updates.location : undefined,
+        lecturer: typeof updates?.lecturer === "string" ? updates.lecturer : undefined,
+      },
+    };
+  }
+
+  if (value.type === ASSISTANT_ACTION_TYPE.DELETE_ENTITY) {
+    return {
+      type: ASSISTANT_ACTION_TYPE.DELETE_ENTITY,
+      confidence: normalizeConfidence(value.confidence),
+      entityType: String(value.entityType ?? "REMINDER") as "REMINDER" | "NOTE" | "TIMETABLE_ENTRY",
+      entityId: String(value.entityId ?? ""),
+      requiresConfirmation: Boolean(value.requiresConfirmation ?? true),
+    };
+  }
+
+  if (value.type === ASSISTANT_ACTION_TYPE.SEARCH_MEMORY) {
+    const answer = value.answer as Record<string, unknown> | undefined;
+    const timeContext = value.timeContext as Record<string, unknown> | undefined;
+    const timeRange = timeContext?.timeRange as Record<string, unknown> | undefined;
+
+    return {
+      type: ASSISTANT_ACTION_TYPE.SEARCH_MEMORY,
+      query: String(value.query ?? ""),
+      target: String(value.target ?? "ALL") as "SCHEDULE" | "MEMORY" | "REMINDERS" | "NOTES" | "ALL",
+      timeContext: timeContext ? {
+        date: typeof timeContext.date === "string" ? new Date(timeContext.date) : undefined,
+        dayOfWeek: typeof timeContext.dayOfWeek === "number" ? timeContext.dayOfWeek : undefined,
+        timeRange: timeRange ? {
+          start: String(timeRange.start ?? ""),
+          end: String(timeRange.end ?? ""),
+        } : undefined,
+      } : undefined,
+      answer: answer ? {
+        summary: String(answer.summary ?? ""),
+        evidence: Array.isArray(answer.evidence) ? answer.evidence.map((item) => String(item)) : [],
+        sources: Array.isArray(answer.sources)
+          ? answer.sources.map((s: unknown) => {
+              const src = s as Record<string, unknown>;
+              return {
+                type: String(src.type ?? ""),
+                id: String(src.id ?? ""),
+                title: String(src.title ?? ""),
+              };
+            })
+          : undefined,
+      } : undefined,
+    };
+  }
+
+  if (value.type === ASSISTANT_ACTION_TYPE.DISAMBIGUATE) {
+    const options = value.options as Array<Record<string, unknown>> | undefined;
+
+    return {
+      type: ASSISTANT_ACTION_TYPE.DISAMBIGUATE,
+      options: Array.isArray(options)
+        ? options.map((opt) => ({
+            label: String(opt.label ?? ""),
+            action: opt.action as AssistantAction,
+            description: String(opt.description ?? ""),
+          }))
+        : [],
+      defaultOption: typeof value.defaultOption === "number" ? value.defaultOption : 0,
+    };
+  }
+
   if (value.type === ASSISTANT_ACTION_TYPE.ANSWER_QUESTION) {
     const answer = value.answer as Record<string, unknown> | undefined;
 
@@ -539,6 +821,16 @@ function normalizeAssistantAction(output: unknown): AssistantAction {
       answer: {
         summary: String(answer?.summary ?? ""),
         evidence: Array.isArray(answer?.evidence) ? answer.evidence.map((item) => String(item)) : [],
+        sources: Array.isArray(answer?.sources)
+          ? answer.sources.map((s: unknown) => {
+              const src = s as Record<string, unknown>;
+              return {
+                type: String(src.type ?? ""),
+                id: String(src.id ?? ""),
+                title: String(src.title ?? ""),
+              };
+            })
+          : undefined,
       },
     };
   }
@@ -548,7 +840,7 @@ function normalizeAssistantAction(output: unknown): AssistantAction {
 
     return {
       type: ASSISTANT_ACTION_TYPE.CREATE_TIMETABLE_ENTRY,
-      confidence: value.confidence === "medium" ? "medium" : "high",
+      confidence: normalizeConfidence(value.confidence),
       timetableEntry: {
         subject: String(timetableEntry?.subject ?? ""),
         location: typeof timetableEntry?.location === "string" ? timetableEntry.location : undefined,
@@ -598,4 +890,10 @@ function normalizeAssistantAction(output: unknown): AssistantAction {
     type: ASSISTANT_ACTION_TYPE.REJECT_REQUEST,
     reason: String(value.reason ?? "I could not process that request."),
   };
+}
+
+function normalizeConfidence(value: unknown): "high" | "medium" | "low" {
+  if (value === "low") return "low";
+  if (value === "medium") return "medium";
+  return "high";
 }

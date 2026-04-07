@@ -20,9 +20,13 @@ import {
 } from "@/lib/assistant/types";
 import { processConversationMemory } from "@/lib/memory/service";
 import { createReminder } from "@/lib/reminders/service";
-import { createTimetableEntry } from "@/lib/timetable/service";
+import { createTimetableEntry, updateTimetableEntry, deleteTimetableEntry } from "@/lib/timetable/service";
 import { db } from "@/lib/db";
 import { formatDateLabel } from "@/lib/datetime";
+import { executeSearchMemory } from "@/lib/assistant/queries";
+import { createMemoryForEntity, updateMemoryForEntity } from "@/lib/memory/dual-write";
+import { createNote, deleteNote } from "@/lib/notes/service";
+import { deleteReminder } from "@/lib/reminders/service";
 
 type RecentEntityReference =
   | {
@@ -49,6 +53,10 @@ function buildExecutedMessage(title: string, dueAt?: Date) {
   return `Created reminder: ${title} for ${dueAt.toISOString()}.`;
 }
 
+function buildNoteCreatedMessage(title: string) {
+  return `Created note: ${title}.`;
+}
+
 function buildTimetableExecutedMessage(input: {
   subject: string;
   dayOfWeek: number;
@@ -59,6 +67,14 @@ function buildTimetableExecutedMessage(input: {
 }) {
   const weekdayLabels = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
   return `Created timetable entry: ${input.subject} every ${weekdayLabels[input.dayOfWeek - 1] ?? "week"} from ${input.startTime} to ${input.endTime}, between ${formatDateLabel(input.semesterStart)} and ${formatDateLabel(input.semesterEnd)}.`;
+}
+
+function buildTimetableUpdatedMessage(subject: string, updates: Record<string, unknown>) {
+  const changedFields = Object.keys(updates).filter((k) => updates[k] !== undefined);
+  if (changedFields.length === 0) {
+    return `No changes made to ${subject}.`;
+  }
+  return `Updated ${subject}: ${changedFields.join(", ")} changed.`;
 }
 
 function buildTimetableClarificationMessage(missingFields: string[]) {
@@ -224,6 +240,7 @@ export function buildFollowUpInput(input: string, recentConversation: Array<{ ro
     lower.startsWith("set reminder") ||
     lower.startsWith("add reminder") ||
     lower.startsWith("create reminder") ||
+    lower.startsWith("note that") ||
     lower.startsWith("add a timetable entry") ||
     lower.startsWith("add timetable entry") ||
     lower.startsWith("add a class") ||
@@ -250,6 +267,7 @@ function looksLikeStandaloneIntent(input: string) {
     lower.startsWith("set reminder") ||
     lower.startsWith("add reminder") ||
     lower.startsWith("create reminder") ||
+    lower.startsWith("note that") ||
     lower.startsWith("add a timetable entry") ||
     lower.startsWith("add timetable entry") ||
     lower.startsWith("add a class") ||
@@ -389,18 +407,67 @@ export async function runAssistantWorkflow(input: AssistantWorkflowInput): Promi
     }),
   ) as AssistantAction;
 
+  const result = await executeAction(action, input.userId, conversation.id);
+
+  await processConversationMemory(input.userId, conversation.id);
+
+  return result;
+}
+
+async function executeAction(
+  action: AssistantAction,
+  userId: string,
+  conversationId: string,
+): Promise<AssistantWorkflowResult> {
   if (action.type === ASSISTANT_ACTION_TYPE.CREATE_REMINDER) {
-    await createReminder(input.userId, action.reminder);
+    const reminder = await createReminder(userId, action.reminder);
+
+    await createMemoryForEntity({
+      userId,
+      entityType: "REMINDER",
+      entityId: reminder.id,
+      entityTitle: reminder.title,
+      entityContent: `${reminder.title}${reminder.description ? ` - ${reminder.description}` : ""}`,
+      conversationId,
+    });
 
     const message = buildExecutedMessage(action.reminder.title, action.reminder.dueAt);
-    await appendConversationMessage(conversation.id, ConversationMessageRole.ASSISTANT, message, action);
-    await processConversationMemory(input.userId, conversation.id);
+    await appendConversationMessage(conversationId, ConversationMessageRole.ASSISTANT, message, action);
 
     return {
       kind: ASSISTANT_RESULT_KIND.EXECUTED,
       action,
       message,
-      conversationId: conversation.id,
+      conversationId,
+    };
+  }
+
+  if (action.type === ASSISTANT_ACTION_TYPE.CREATE_NOTE) {
+    const note = await createNote(userId, {
+      title: action.note.title,
+      content: action.note.content,
+      tags: action.note.tags ?? [],
+    });
+
+    if (action.alsoCreateMemory) {
+      await createMemoryForEntity({
+        userId,
+        entityType: "NOTE",
+        entityId: note.id,
+        entityTitle: note.title,
+        entityContent: note.content,
+        conversationId,
+      });
+    }
+
+    const message = buildNoteCreatedMessage(action.note.title);
+    await appendConversationMessage(conversationId, ConversationMessageRole.ASSISTANT, message, action);
+
+    return {
+      kind: ASSISTANT_RESULT_KIND.EXECUTED,
+      action,
+      message,
+      conversationId,
     };
   }
 
@@ -423,22 +490,21 @@ export async function runAssistantWorkflow(input: AssistantWorkflowInput): Promi
       };
 
       await appendConversationMessage(
-        conversation.id,
+        conversationId,
         ConversationMessageRole.ASSISTANT,
         clarificationAction.clarification.question,
         clarificationAction,
       );
-      await processConversationMemory(input.userId, conversation.id);
 
       return {
         kind: ASSISTANT_RESULT_KIND.CLARIFICATION,
         action: clarificationAction,
         message: clarificationAction.clarification.question,
-        conversationId: conversation.id,
+        conversationId,
       };
     }
 
-    const entry = await createTimetableEntry(input.userId, {
+    const entry = await createTimetableEntry(userId, {
       subject: action.timetableEntry.subject,
       location: action.timetableEntry.location ?? "",
       lecturer: action.timetableEntry.lecturer ?? "",
@@ -450,6 +516,15 @@ export async function runAssistantWorkflow(input: AssistantWorkflowInput): Promi
       reminderLeadMinutes: action.timetableEntry.reminderLeadMinutes ?? 30,
     });
 
+    await createMemoryForEntity({
+      userId,
+      entityType: "TIMETABLE_ENTRY",
+      entityId: entry.id,
+      entityTitle: entry.subject,
+      entityContent: `${entry.subject} on ${["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"][entry.dayOfWeek - 1]} from ${entry.startTime} to ${entry.endTime}${entry.location ? ` at ${entry.location}` : ""}`,
+      conversationId,
+    });
+
     const message = buildTimetableExecutedMessage({
       subject: entry.subject,
       dayOfWeek: entry.dayOfWeek,
@@ -458,55 +533,145 @@ export async function runAssistantWorkflow(input: AssistantWorkflowInput): Promi
       semesterStart: entry.semesterStart,
       semesterEnd: entry.semesterEnd,
     });
-    await appendConversationMessage(conversation.id, ConversationMessageRole.ASSISTANT, message, action);
-    await processConversationMemory(input.userId, conversation.id);
+    await appendConversationMessage(conversationId, ConversationMessageRole.ASSISTANT, message, action);
 
     return {
       kind: ASSISTANT_RESULT_KIND.EXECUTED,
       action,
       message,
-      conversationId: conversation.id,
+      conversationId,
+    };
+  }
+
+  if (action.type === ASSISTANT_ACTION_TYPE.UPDATE_TIMETABLE_ENTRY) {
+    const entry = await updateTimetableEntry(userId, action.entryId, action.updates);
+
+    await updateMemoryForEntity(entry.id, "TIMETABLE_ENTRY", {
+      title: entry.subject,
+      content: `${entry.subject} on ${["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"][entry.dayOfWeek - 1]} from ${entry.startTime} to ${entry.endTime}${entry.location ? ` at ${entry.location}` : ""}`,
+    });
+
+    const message = buildTimetableUpdatedMessage(entry.subject, action.updates);
+    await appendConversationMessage(conversationId, ConversationMessageRole.ASSISTANT, message, action);
+
+    return {
+      kind: ASSISTANT_RESULT_KIND.EXECUTED,
+      action,
+      message,
+      conversationId,
+    };
+  }
+
+  if (action.type === ASSISTANT_ACTION_TYPE.DELETE_ENTITY) {
+    if (action.requiresConfirmation) {
+      const message = `Are you sure you want to delete this ${action.entityType.toLowerCase()}?`;
+      await appendConversationMessage(conversationId, ConversationMessageRole.ASSISTANT, message, action);
+
+      return {
+        kind: ASSISTANT_RESULT_KIND.CONFIRMATION,
+        action,
+        message,
+        conversationId,
+      };
+    }
+
+    let message: string;
+    if (action.entityType === "REMINDER") {
+      await deleteReminder(userId, action.entityId);
+      message = "Reminder deleted.";
+    } else if (action.entityType === "NOTE") {
+      await deleteNote(userId, action.entityId);
+      message = "Note deleted.";
+    } else if (action.entityType === "TIMETABLE_ENTRY") {
+      await deleteTimetableEntry(userId, action.entityId);
+      message = "Timetable entry deleted.";
+    } else {
+      message = "Entity deleted.";
+    }
+
+    await appendConversationMessage(conversationId, ConversationMessageRole.ASSISTANT, message, action);
+
+    return {
+      kind: ASSISTANT_RESULT_KIND.EXECUTED,
+      action,
+      message,
+      conversationId,
+    };
+  }
+
+  if (action.type === ASSISTANT_ACTION_TYPE.SEARCH_MEMORY) {
+    const searchResult = await executeSearchMemory({
+      userId,
+      query: action.query,
+      target: action.target,
+      timeContext: action.timeContext,
+    });
+
+    const message = buildAnswerMessage(searchResult.summary, searchResult.evidence);
+    await appendConversationMessage(conversationId, ConversationMessageRole.ASSISTANT, message, {
+      ...action,
+      answer: searchResult,
+    });
+
+    return {
+      kind: ASSISTANT_RESULT_KIND.ANSWERED,
+      action: {
+        ...action,
+        answer: searchResult,
+      },
+      message,
+      conversationId,
     };
   }
 
   if (action.type === ASSISTANT_ACTION_TYPE.ANSWER_QUESTION) {
     const message = buildAnswerMessage(action.answer.summary, action.answer.evidence);
-    await appendConversationMessage(conversation.id, ConversationMessageRole.ASSISTANT, message, action);
-    await processConversationMemory(input.userId, conversation.id);
+    await appendConversationMessage(conversationId, ConversationMessageRole.ASSISTANT, message, action);
 
     return {
       kind: ASSISTANT_RESULT_KIND.ANSWERED,
       action,
       message,
-      conversationId: conversation.id,
+      conversationId,
+    };
+  }
+
+  if (action.type === ASSISTANT_ACTION_TYPE.DISAMBIGUATE) {
+    const message = "I'm not sure what you mean. Please choose one of the following options.";
+    await appendConversationMessage(conversationId, ConversationMessageRole.ASSISTANT, message, action);
+
+    return {
+      kind: ASSISTANT_RESULT_KIND.DISAMBIGUATION,
+      action,
+      message,
+      conversationId,
     };
   }
 
   if (action.type === ASSISTANT_ACTION_TYPE.CLARIFY_MISSING_FIELDS) {
     await appendConversationMessage(
-      conversation.id,
+      conversationId,
       ConversationMessageRole.ASSISTANT,
       action.clarification.question,
       action,
     );
-    await processConversationMemory(input.userId, conversation.id);
 
     return {
       kind: ASSISTANT_RESULT_KIND.CLARIFICATION,
       action,
       message: action.clarification.question,
-      conversationId: conversation.id,
+      conversationId,
     };
   }
 
-  await appendConversationMessage(conversation.id, ConversationMessageRole.ASSISTANT, action.reason, action);
-  await processConversationMemory(input.userId, conversation.id);
+  const message = action.reason;
+  await appendConversationMessage(conversationId, ConversationMessageRole.ASSISTANT, message, action);
 
   return {
     kind: ASSISTANT_RESULT_KIND.REJECTED,
     action,
-    message: action.reason,
-    conversationId: conversation.id,
+    message,
+    conversationId,
   };
 }
 

@@ -21,6 +21,7 @@ export async function updateUserAiSettings(userId: string, input: UserAiSettings
       assistantModel: normalizedAssistantModel,
       transcriptionProvider: values.transcriptionProvider,
       transcriptionModel: values.transcriptionModel,
+      voiceResponseEnabled: values.voiceResponseEnabled ?? true,
     },
   });
 }
@@ -30,11 +31,13 @@ export function getResolvedUserAiSettings(user: {
   assistantModel: string | null;
   transcriptionProvider: string;
   transcriptionModel: string | null;
+  voiceResponseEnabled?: boolean;
 }) {
   return {
     assistantProvider: resolveAssistantProvider(user),
     assistantModel: resolveAssistantModel(user),
     transcriptionProvider: resolveTranscriptionProvider(user),
     transcriptionModel: resolveTranscriptionModel(user),
+    voiceResponseEnabled: user.voiceResponseEnabled ?? true,
   };
 }

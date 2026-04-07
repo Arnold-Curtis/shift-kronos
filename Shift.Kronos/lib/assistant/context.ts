@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { getReminderCollections } from "@/lib/reminders/service";
 import { getTimetableCollections } from "@/lib/timetable/service";
-import { AssistantContext } from "@/lib/assistant/types";
+import { AssistantContext, AssistantTimetableEntryContext, SemesterContext } from "@/lib/assistant/types";
 import { runSemanticRetrieval } from "@/lib/retrieval/service";
 import { getServerEnv } from "@/lib/env";
 import { getMemoryHighlights, getRecentConversationTurns } from "@/lib/memory/service";
@@ -33,6 +33,24 @@ function shouldSkipSemanticRetrieval(query: string | null | undefined) {
   }
 
   return false;
+}
+
+function extractSemesterContext(entries: AssistantTimetableEntryContext[]): SemesterContext | undefined {
+  if (entries.length === 0) return undefined;
+
+  const ranges = entries
+    .filter((e) => e.semesterStart && e.semesterEnd)
+    .map((e) => ({
+      start: e.semesterStart!,
+      end: e.semesterEnd!,
+    }));
+
+  if (ranges.length === 0) return undefined;
+
+  return {
+    semesterStart: ranges[0].start,
+    semesterEnd: ranges[0].end,
+  };
 }
 
 export async function getAssistantContextForUser(
@@ -96,6 +114,69 @@ export async function getAssistantContextForUser(
   const trimmedKnowledgeHighlights = knowledgeHighlights.filter((_, index) => index < (remainingBudget > 400 ? 4 : 2));
   const trimmedMemoryHighlights = memoryHighlights.filter((_, index) => index < (remainingBudget > 700 ? 4 : 2));
 
+  const timetableEntries: AssistantTimetableEntryContext[] = timetable.entries.map((entry) => ({
+    id: entry.id,
+    subject: entry.subject,
+    dayOfWeek: entry.dayOfWeek,
+    startTime: entry.startTime,
+    endTime: entry.endTime,
+    location: entry.location,
+    semesterStart: entry.semesterStart,
+    semesterEnd: entry.semesterEnd,
+  }));
+
+  const semesterContext = extractSemesterContext(timetableEntries);
+
+  let recentMemoryArtifactsRecords: Array<{
+    id: string;
+    title: string | null;
+    content: string;
+    structuredData: unknown;
+    entityType: string | null;
+    relatedEntityId: string | null;
+    createdAt: Date;
+  }> = [];
+
+  try {
+    recentMemoryArtifactsRecords = await db.memoryArtifact.findMany({
+      where: { userId },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+      select: {
+        id: true,
+        title: true,
+        content: true,
+        structuredData: true,
+        entityType: true,
+        relatedEntityId: true,
+        createdAt: true,
+      },
+    });
+  } catch (error) {
+    logWarn("assistant.context.memory-artifacts-failed", {
+      userId,
+      error,
+    });
+  }
+
+  const recentMemoryArtifacts = recentMemoryArtifactsRecords.map((artifact) => {
+    const structured =
+      typeof artifact.structuredData === "object" && artifact.structuredData
+        ? (artifact.structuredData as { salientFacts?: string[]; keywords?: string[] })
+        : null;
+
+    return {
+      id: artifact.id,
+      title: artifact.title,
+      content: artifact.content.slice(0, 200),
+      salientFacts: structured?.salientFacts ?? [],
+      keywords: structured?.keywords ?? [],
+      entityType: artifact.entityType,
+      relatedEntityId: artifact.relatedEntityId,
+      createdAt: artifact.createdAt,
+    };
+  });
+
   return {
     timezone: currentUser?.timezone ?? "Africa/Lagos",
     now,
@@ -113,6 +194,7 @@ export async function getAssistantContextForUser(
       startsAt: entry.startsAt,
       location: entry.location,
     })),
+    timetableEntries,
     knowledgeHighlights: trimmedKnowledgeHighlights.map((match) => ({
       sourceType: match.sourceType,
       sourceId: match.sourceId,
@@ -128,6 +210,8 @@ export async function getAssistantContextForUser(
       score: item.score,
       sourceType: item.sourceType,
     })),
+    recentMemoryArtifacts,
     recentConversation,
+    semesterContext,
   };
 }

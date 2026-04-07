@@ -141,6 +141,7 @@ export default async function MePage() {
             currentAssistantModel={aiSettings.assistantModel}
             currentTranscriptionProvider={aiSettings.transcriptionProvider}
             currentTranscriptionModel={aiSettings.transcriptionModel}
+            currentVoiceResponseEnabled={aiSettings.voiceResponseEnabled}
           />
         </GlassCard>
       </div>
