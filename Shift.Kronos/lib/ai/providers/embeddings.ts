@@ -26,6 +26,16 @@ function buildDeterministicTestVector(input: string, dimensions: number) {
   return values;
 }
 
+function normalizeEmbeddingModel(model: string) {
+  const trimmed = model.trim();
+
+  if (trimmed === "text-embedding-004") {
+    return "gemini-embedding-001";
+  }
+
+  return trimmed;
+}
+
 export async function generateEmbedding(input: string): Promise<EmbeddingResult> {
   const env = getServerEnv();
   const trimmed = input.trim();
@@ -38,13 +48,13 @@ export async function generateEmbedding(input: string): Promise<EmbeddingResult>
     const values = buildDeterministicTestVector(trimmed, Number(env.PHASE5_EMBEDDING_DIMENSIONS));
 
     return {
-      model: env.PHASE5_EMBEDDING_MODEL,
+      model: normalizeEmbeddingModel(env.PHASE5_EMBEDDING_MODEL),
       dimensions: values.length,
       values,
     };
   }
 
-  const model = env.PHASE5_EMBEDDING_MODEL;
+  const model = normalizeEmbeddingModel(env.PHASE5_EMBEDDING_MODEL);
 
   const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:embedContent?key=${env.GEMINI_API_KEY}`, {
     method: "POST",

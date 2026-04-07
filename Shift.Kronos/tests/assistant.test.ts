@@ -4,6 +4,7 @@ import { parseAssistantIntentHeuristically } from "@/lib/ai/heuristics";
 import { ASSISTANT_ACTION_TYPE } from "@/lib/assistant/types";
 import { buildFollowUpInput, buildStructuredFollowUpInput } from "@/lib/assistant/service";
 import { generateStructuredAssistantAction } from "@/lib/ai/providers/text";
+import { assistantParseResultSchema } from "@/lib/assistant/schemas";
 
 const context = {
   timezone: "Africa/Lagos",
@@ -430,6 +431,32 @@ describe("assistant heuristic parsing", () => {
 
     expect(result.answer.summary).toContain("Revision strategy");
     expect(result.answer.evidence[0]).toContain("Focus on operating systems revision");
+  });
+
+  it("accepts structured search actions from the assistant schema", () => {
+    const result = assistantParseResultSchema.parse({
+      type: ASSISTANT_ACTION_TYPE.SEARCH_MEMORY,
+      query: "what classes do i have tomorrow",
+      target: "SCHEDULE",
+      timeContext: {
+        dayOfWeek: 3,
+      },
+    });
+
+    expect(result.type).toBe(ASSISTANT_ACTION_TYPE.SEARCH_MEMORY);
+  });
+
+  it("accepts timetable update actions from the assistant schema", () => {
+    const result = assistantParseResultSchema.parse({
+      type: ASSISTANT_ACTION_TYPE.UPDATE_TIMETABLE_ENTRY,
+      confidence: "high",
+      entryId: "entry_123",
+      updates: {
+        subject: "Chemistry",
+      },
+    });
+
+    expect(result.type).toBe(ASSISTANT_ACTION_TYPE.UPDATE_TIMETABLE_ENTRY);
   });
 
   it("can include memory evidence alongside retrieved knowledge", () => {

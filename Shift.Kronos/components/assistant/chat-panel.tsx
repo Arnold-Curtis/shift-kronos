@@ -17,7 +17,9 @@ type ChatPanelProps = {
 export function ChatPanel({ conversations, selectedConversation, selectedConversationId }: ChatPanelProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const activeConversation =
-    selectedConversation ?? conversations.find((c) => c.id === selectedConversationId) ?? conversations[0] ?? null;
+    selectedConversationId
+      ? selectedConversation ?? conversations.find((c) => c.id === selectedConversationId) ?? null
+      : null;
 
   return (
     <div className="flex h-[calc(100dvh-140px)] lg:h-[calc(100dvh-96px)] overflow-hidden rounded-2xl border border-border-subtle bg-bg-elevated/50">
