@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildChunkInputs, splitIntoChunks } from "@/lib/retrieval/chunking";
 import { generateEmbedding } from "@/lib/ai/providers/embeddings";
+import { normalizeAssistantModelForProvider } from "@/lib/ai/preferences";
 
 describe("retrieval chunking", () => {
   it("splits long content into deterministic chunks", () => {
@@ -40,6 +41,10 @@ describe("embedding provider", () => {
     process.env.TELEGRAM_BOT_TOKEN = "telegram_bot_token";
     process.env.GEMINI_API_KEY = "gemini_api_key";
     process.env.GROQ_API_KEY = "groq_api_key";
+    process.env.OPENROUTER_API_KEY = "openrouter_api_key";
+    process.env.OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
+    process.env.OPENROUTER_HTTP_REFERER = "https://shift-kronos.test";
+    process.env.OPENROUTER_TITLE = "Shift:Kronos";
     process.env.PHASE7_CRON_SECRET = "phase7-cron-secret";
     process.env.PHASE7_TELEGRAM_WEBHOOK_SECRET = "phase7-telegram-secret";
 
@@ -48,5 +53,15 @@ describe("embedding provider", () => {
     expect(result.model).toBe("test-embedding-model");
     expect(result.dimensions).toBe(12);
     expect(result.values).toHaveLength(12);
+  });
+});
+
+describe("assistant model normalization", () => {
+  it("falls back to the OpenRouter default when a legacy Groq model is still saved", () => {
+    expect(normalizeAssistantModelForProvider("openrouter", "llama-3.3-70b-versatile")).toBe("qwen/qwen3-next-80b-a3b-instruct");
+  });
+
+  it("keeps valid OpenRouter model ids intact", () => {
+    expect(normalizeAssistantModelForProvider("openrouter", "qwen/qwen3-next-80b-a3b-instruct")).toBe("qwen/qwen3-next-80b-a3b-instruct");
   });
 });

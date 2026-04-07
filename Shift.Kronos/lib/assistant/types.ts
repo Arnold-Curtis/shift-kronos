@@ -1,4 +1,10 @@
-import { ConversationMessageRole, ReminderPriority, ReminderType, RecurrenceFrequency, RetrievalSourceType } from "@prisma/client";
+import {
+  ConversationMessageRole,
+  ReminderPriority,
+  ReminderType,
+  RecurrenceFrequency,
+  RetrievalSourceType,
+} from "@prisma/client";
 
 export const ASSISTANT_INPUT_SOURCE = {
   WEB_CAPTURE: "web-capture",
@@ -22,6 +28,7 @@ export type AssistantResultKind =
 
 export const ASSISTANT_ACTION_TYPE = {
   CREATE_REMINDER: "create_reminder",
+  CREATE_TIMETABLE_ENTRY: "create_timetable_entry",
   ANSWER_QUESTION: "answer_question",
   CLARIFY_MISSING_FIELDS: "clarify_missing_fields",
   REJECT_REQUEST: "reject_request",
@@ -51,6 +58,18 @@ export type AssistantQuestionAnswer = {
   evidence: string[];
 };
 
+export type AssistantTimetableDraft = {
+  subject: string;
+  location?: string;
+  lecturer?: string;
+  dayOfWeek?: number;
+  startTime?: string;
+  endTime?: string;
+  semesterStart?: Date;
+  semesterEnd?: Date;
+  reminderLeadMinutes?: number;
+};
+
 export type AssistantClarification = {
   missingFields: string[];
   question: string;
@@ -60,6 +79,11 @@ export type AssistantAction =
   | {
       type: typeof ASSISTANT_ACTION_TYPE.CREATE_REMINDER;
       reminder: AssistantReminderDraft;
+      confidence: "high" | "medium";
+    }
+  | {
+      type: typeof ASSISTANT_ACTION_TYPE.CREATE_TIMETABLE_ENTRY;
+      timetableEntry: AssistantTimetableDraft;
       confidence: "high" | "medium";
     }
   | {
@@ -131,7 +155,7 @@ export type AssistantWorkflowInput = {
 export type AssistantWorkflowResult =
   | {
       kind: typeof ASSISTANT_RESULT_KIND.EXECUTED;
-      action: Extract<AssistantAction, { type: "create_reminder" }>;
+      action: Extract<AssistantAction, { type: "create_reminder" | "create_timetable_entry" }>;
       message: string;
       conversationId?: string;
     }

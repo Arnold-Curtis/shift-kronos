@@ -26,6 +26,9 @@ export function AiSettingsForm({
   currentTranscriptionProvider,
   currentTranscriptionModel,
 }: AiSettingsFormProps) {
+  const assistantModelLooksLegacy =
+    currentAssistantProvider === "openrouter" && Boolean(currentAssistantModel) && !currentAssistantModel.includes("/");
+
   return (
     <form action={updateUserAiSettingsAction} className="grid gap-4">
       <div className="grid gap-4 md:grid-cols-2">
@@ -46,7 +49,7 @@ export function AiSettingsForm({
             ))}
           </select>
           <p className="mt-3 text-sm leading-6 text-foreground-muted">
-            Choose the model backend used for assistant chat, quick capture, and grounded answers.
+            OpenRouter is the assistant backend for chat, quick capture, and grounded answers. The model can be changed later without changing the integration.
           </p>
         </div>
 
@@ -62,8 +65,13 @@ export function AiSettingsForm({
             className="mt-3 w-full rounded-2xl border border-border bg-panel px-4 py-3 text-sm text-foreground outline-none"
           />
           <p className="mt-3 text-sm leading-6 text-foreground-muted">
-            Example models: {assistantOptions.flatMap((option) => option.suggestedModels).join(", ")}.
+            Recommended models: {assistantOptions.flatMap((option) => option.suggestedModels).join(", ")}.
           </p>
+          {assistantModelLooksLegacy ? (
+            <p className="mt-3 rounded-2xl border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm leading-6 text-amber-100">
+              The saved assistant model looks like a legacy non-OpenRouter id. Saving settings will reset it to a compatible OpenRouter model automatically.
+            </p>
+          ) : null}
         </div>
 
         <div className="rounded-2xl border border-border bg-black/10 px-4 py-4">

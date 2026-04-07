@@ -99,7 +99,7 @@ export async function runSemanticRetrieval(args: {
   const limit = args.limit ?? 6;
 
   const sourceFilter = args.sourceTypes?.length
-    ? Prisma.sql`AND "sourceType" IN (${Prisma.join(args.sourceTypes)})`
+    ? Prisma.sql`AND "sourceType" IN (${Prisma.join(args.sourceTypes.map((value) => Prisma.sql`${value}::"RetrievalSourceType"`))})`
     : Prisma.empty;
 
   const rows = await db.$queryRaw<Array<{

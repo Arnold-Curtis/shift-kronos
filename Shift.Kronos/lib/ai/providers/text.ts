@@ -9,8 +9,10 @@ import {
   ASSISTANT_PROVIDER,
   AssistantProvider,
   DEFAULT_ASSISTANT_MODEL_BY_PROVIDER,
+  getAssistantProviderOptions,
 } from "@/lib/ai/preferences";
 import { memorySummarySchema } from "@/lib/memory/schemas";
+import { logWarn } from "@/lib/observability/logger";
 import {
   ConversationMessageRole,
   RecurrenceFrequency,
@@ -19,6 +21,7 @@ import {
 } from "@prisma/client";
 
 export type StructuredAssistantRequest = {
+  userId?: string;
   input: string;
   context: AssistantContext;
   provider?: AssistantProvider;
@@ -26,6 +29,7 @@ export type StructuredAssistantRequest = {
 };
 
 export type StructuredMemorySummaryRequest = {
+  userId?: string;
   conversationId: string;
   messages: Array<{
     role: ConversationMessageRole;
@@ -97,9 +101,12 @@ function buildAssistantSystemPrompt() {
   return [
     "You are Shift:Kronos assistant.",
     "Return only valid JSON matching the requested schema.",
+    "Do not wrap the JSON in markdown, code fences, or commentary.",
     "You must stay deterministic at the mutation boundary.",
-    "Create reminders only when the user intent is clear enough.",
-    "If timing or title is missing, ask a clarification question instead of inventing details.",
+    "Create reminders or timetable entries only when the user intent is clear enough.",
+    "If required fields are missing, ask a clarification question instead of inventing details.",
+    "Timetable entries are recurring semester classes, not one-time reminders.",
+    "Never invent timetable end times or semester bounds when the user has not provided them.",
     "If the user asks about schedule, notes, files, or memory, answer grounded only in provided context.",
     "Never mention provider details or reasoning steps.",
   ].join(" ");
@@ -109,6 +116,7 @@ function buildMemorySystemPrompt() {
   return [
     "You summarize prior conversation turns for future grounding.",
     "Return only valid JSON matching the schema.",
+    "Do not wrap the JSON in markdown, code fences, or commentary.",
     "Capture salient facts, open loops, and keywords without embellishment.",
     "Do not invent facts that are not present in the messages.",
   ].join(" ");
@@ -141,102 +149,105 @@ function buildMemoryUserPrompt(request: StructuredMemorySummaryRequest) {
   );
 }
 
-async function fetchGroqStructuredOutput(args: {
-  apiKey: string;
-  model: string;
-  messages: ChatMessage[];
-  jsonSchema: JsonSchemaDefinition;
-}) {
-  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${args.apiKey}`,
-    },
-    body: JSON.stringify({
-      model: args.model,
-      messages: args.messages,
-      temperature: 0.1,
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: args.jsonSchema.name,
-          schema: args.jsonSchema.schema,
-        },
-      },
-    }),
-  });
+function extractJsonObject(text: string) {
+  const trimmed = text.trim();
 
-  if (!response.ok) {
-    throw new Error(`Groq chat completion failed with status ${response.status}.`);
+  if (!trimmed) {
+    throw new Error("Model returned empty content.");
   }
 
-  const payload = (await response.json()) as {
-    choices?: Array<{
-      message?: {
-        content?: string | null;
-      };
-    }>;
-  };
+  const fenced = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = fenced ? fenced[1].trim() : trimmed;
+  const firstBrace = candidate.indexOf("{");
+  const lastBrace = candidate.lastIndexOf("}");
 
-  const content = payload.choices?.[0]?.message?.content?.trim();
-
-  if (!content) {
-    throw new Error("Groq chat completion returned empty content.");
+  if (firstBrace === -1 || lastBrace === -1 || lastBrace < firstBrace) {
+    throw new Error("Model did not return a JSON object.");
   }
 
-  return JSON.parse(content) as unknown;
+  return candidate.slice(firstBrace, lastBrace + 1);
 }
 
-async function fetchGitHubModelsStructuredOutput(args: {
-  apiKey: string;
-  baseUrl: string;
+async function fetchOpenRouterStructuredOutput(args: {
+  env: ReturnType<typeof getServerEnv>;
   model: string;
   messages: ChatMessage[];
   jsonSchema: JsonSchemaDefinition;
 }) {
-  const response = await fetch(`${args.baseUrl.replace(/\/$/, "")}/chat/completions`, {
+  const response = await fetch(`${args.env.OPENROUTER_BASE_URL.replace(/\/$/, "")}/chat/completions`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${args.apiKey}`,
+      Authorization: `Bearer ${args.env.OPENROUTER_API_KEY}`,
+      ...(args.env.OPENROUTER_HTTP_REFERER
+        ? {
+            "HTTP-Referer": args.env.OPENROUTER_HTTP_REFERER,
+          }
+        : {}),
+      ...(args.env.OPENROUTER_TITLE
+        ? {
+            "X-OpenRouter-Title": args.env.OPENROUTER_TITLE,
+          }
+        : {}),
     },
     body: JSON.stringify({
       model: args.model,
-      messages: args.messages,
-      temperature: 0.1,
-      response_format: {
-        type: "json_schema",
-        json_schema: {
-          name: args.jsonSchema.name,
-          schema: args.jsonSchema.schema,
+      messages: [
+        ...args.messages,
+        {
+          role: "system",
+          content: [
+            "JSON schema name:",
+            args.jsonSchema.name,
+            "JSON schema:",
+            JSON.stringify(args.jsonSchema.schema),
+          ].join(" "),
         },
-      },
+      ],
+      temperature: 0.1,
+      stream: false,
     }),
   });
 
   if (!response.ok) {
-    throw new Error(`GitHub Models chat completion failed with status ${response.status}.`);
+    const errorBody = await response.text();
+    throw new Error(`OpenRouter chat completion failed with status ${response.status}: ${errorBody.slice(0, 600)}`);
   }
 
   const payload = (await response.json()) as {
     choices?: Array<{
       message?: {
-        content?: string | null;
+        content?: string | Array<{ text?: string }> | null;
       };
     }>;
   };
 
-  const content = payload.choices?.[0]?.message?.content?.trim();
+  const content = payload.choices?.[0]?.message?.content;
 
-  if (!content) {
-    throw new Error("GitHub Models chat completion returned empty content.");
-  }
+  const text =
+    typeof content === "string"
+      ? content
+      : Array.isArray(content)
+        ? content
+            .map((item) => {
+              if (typeof item === "string") {
+                return item;
+              }
 
-  return JSON.parse(content) as unknown;
+              if (item && typeof item === "object" && "text" in item) {
+                return typeof item.text === "string" ? item.text : "";
+              }
+
+              return "";
+            })
+            .join("")
+        : "";
+
+  return JSON.parse(extractJsonObject(text)) as unknown;
 }
 
 async function generateStructuredJson(args: {
+  userId?: string;
   provider: AssistantProvider;
   model: string;
   messages: ChatMessage[];
@@ -244,26 +255,24 @@ async function generateStructuredJson(args: {
 }) {
   const env = getServerEnv();
 
-  if (args.provider === ASSISTANT_PROVIDER.GITHUB_MODELS) {
-    if (!env.GITHUB_MODELS_API_KEY) {
-      throw new Error("GITHUB_MODELS_API_KEY is required when using GitHub Models.");
-    }
-
-    return fetchGitHubModelsStructuredOutput({
-      apiKey: env.GITHUB_MODELS_API_KEY,
-      baseUrl: env.GITHUB_MODELS_BASE_URL,
-      model: args.model,
-      messages: args.messages,
-      jsonSchema: args.jsonSchema,
-    });
+  if (args.provider !== ASSISTANT_PROVIDER.OPENROUTER) {
+    throw new Error(`Unsupported assistant provider: ${args.provider}`);
   }
 
-  return fetchGroqStructuredOutput({
-    apiKey: env.GROQ_API_KEY,
+  return fetchOpenRouterStructuredOutput({
+    env,
     model: args.model,
     messages: args.messages,
     jsonSchema: args.jsonSchema,
   });
+}
+
+function getAssistantFallbackModels(primaryModel: string) {
+  const suggested = getAssistantProviderOptions()
+    .flatMap((option) => option.suggestedModels)
+    .filter((model, index, all) => all.indexOf(model) === index);
+
+  return [primaryModel, ...suggested.filter((model) => model !== primaryModel)];
 }
 
 function getAssistantActionSchema(): JsonSchemaDefinition {
@@ -311,6 +320,22 @@ function getAssistantActionSchema(): JsonSchemaDefinition {
             },
           },
           required: ["title", "type", "priority", "tags"],
+        },
+        timetableEntry: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            subject: { type: "string" },
+            location: { type: "string" },
+            lecturer: { type: "string" },
+            dayOfWeek: { type: "number" },
+            startTime: { type: "string" },
+            endTime: { type: "string" },
+            semesterStart: { type: "string" },
+            semesterEnd: { type: "string" },
+            reminderLeadMinutes: { type: "number" },
+          },
+          required: ["subject"],
         },
         answer: {
           type: "object",
@@ -379,30 +404,51 @@ export async function generateStructuredAssistantAction(
     return parseAssistantIntentHeuristically(request.input, request.context);
   }
 
-  const provider = request.provider ?? ASSISTANT_PROVIDER.GROQ;
+  const provider = request.provider ?? ASSISTANT_PROVIDER.OPENROUTER;
   const model = request.model ?? DEFAULT_ASSISTANT_MODEL_BY_PROVIDER[provider];
+  const candidateModels = getAssistantFallbackModels(model);
+  let lastError: unknown = null;
 
-  try {
-    const output = await generateStructuredJson({
-      provider,
-      model,
-      jsonSchema: getAssistantActionSchema(),
-      messages: [
-        {
-          role: "system",
-          content: buildAssistantSystemPrompt(),
-        },
-        {
-          role: "user",
-          content: buildAssistantUserPrompt(request),
-        },
-      ],
-    });
+  for (const candidateModel of candidateModels) {
+    try {
+      const output = await generateStructuredJson({
+        userId: request.userId,
+        provider,
+        model: candidateModel,
+        jsonSchema: getAssistantActionSchema(),
+        messages: [
+          {
+            role: "system",
+            content: buildAssistantSystemPrompt(),
+          },
+          {
+            role: "user",
+            content: buildAssistantUserPrompt(request),
+          },
+        ],
+      });
 
-    return normalizeAssistantAction(output);
-  } catch {
-    return parseAssistantIntentHeuristically(request.input, request.context);
+      return normalizeAssistantAction(output);
+    } catch (error) {
+      lastError = error;
+
+      logWarn("assistant.provider.openrouter-model-attempt-failed", {
+        provider,
+        model: candidateModel,
+        userId: request.userId,
+        error,
+      });
+    }
   }
+
+  logWarn("assistant.provider.openrouter-fallback", {
+    provider,
+    model,
+    userId: request.userId,
+    error: lastError,
+  });
+
+  return parseAssistantIntentHeuristically(request.input, request.context);
 }
 
 export async function generateStructuredMemorySummary(request: StructuredMemorySummaryRequest) {
@@ -412,11 +458,12 @@ export async function generateStructuredMemorySummary(request: StructuredMemoryS
     return buildFallbackMemorySummary(request);
   }
 
-  const provider = request.provider ?? ASSISTANT_PROVIDER.GROQ;
+  const provider = request.provider ?? ASSISTANT_PROVIDER.OPENROUTER;
   const model = request.model ?? DEFAULT_ASSISTANT_MODEL_BY_PROVIDER[provider];
 
   try {
     const output = await generateStructuredJson({
+      userId: request.userId,
       provider,
       model,
       jsonSchema: getMemorySummarySchema(),
@@ -433,7 +480,14 @@ export async function generateStructuredMemorySummary(request: StructuredMemoryS
     });
 
     return memorySummarySchema.parse(output);
-  } catch {
+  } catch (error) {
+    logWarn("memory.provider.openrouter-fallback", {
+      provider,
+      model,
+      userId: request.userId,
+      error,
+    });
+
     return buildFallbackMemorySummary(request);
   }
 }
@@ -489,16 +543,53 @@ function normalizeAssistantAction(output: unknown): AssistantAction {
     };
   }
 
+  if (value.type === ASSISTANT_ACTION_TYPE.CREATE_TIMETABLE_ENTRY) {
+    const timetableEntry = value.timetableEntry as Record<string, unknown> | undefined;
+
+    return {
+      type: ASSISTANT_ACTION_TYPE.CREATE_TIMETABLE_ENTRY,
+      confidence: value.confidence === "medium" ? "medium" : "high",
+      timetableEntry: {
+        subject: String(timetableEntry?.subject ?? ""),
+        location: typeof timetableEntry?.location === "string" ? timetableEntry.location : undefined,
+        lecturer: typeof timetableEntry?.lecturer === "string" ? timetableEntry.lecturer : undefined,
+        dayOfWeek: typeof timetableEntry?.dayOfWeek === "number" ? Number(timetableEntry.dayOfWeek) : undefined,
+        startTime: typeof timetableEntry?.startTime === "string" ? timetableEntry.startTime : undefined,
+        endTime: typeof timetableEntry?.endTime === "string" ? timetableEntry.endTime : undefined,
+        semesterStart:
+          typeof timetableEntry?.semesterStart === "string" && timetableEntry.semesterStart
+            ? new Date(timetableEntry.semesterStart)
+            : undefined,
+        semesterEnd:
+          typeof timetableEntry?.semesterEnd === "string" && timetableEntry.semesterEnd
+            ? new Date(timetableEntry.semesterEnd)
+            : undefined,
+        reminderLeadMinutes:
+          typeof timetableEntry?.reminderLeadMinutes === "number"
+            ? Number(timetableEntry.reminderLeadMinutes)
+            : undefined,
+      },
+    };
+  }
+
   if (value.type === ASSISTANT_ACTION_TYPE.CLARIFY_MISSING_FIELDS) {
     const clarification = value.clarification as Record<string, unknown> | undefined;
+    const normalizedMissingFields = Array.isArray(clarification?.missingFields)
+      ? clarification.missingFields
+          .map((item) => String(item).trim())
+          .filter((item) => item.length > 0)
+          .filter((item, index, all) => all.indexOf(item) === index)
+          .slice(0, 6)
+      : [];
+    const normalizedQuestion = String(clarification?.question ?? "Can you clarify what you want to do?")
+      .trim()
+      .slice(0, 300);
 
     return {
       type: ASSISTANT_ACTION_TYPE.CLARIFY_MISSING_FIELDS,
       clarification: {
-        missingFields: Array.isArray(clarification?.missingFields)
-          ? clarification.missingFields.map((item) => String(item))
-          : [],
-        question: String(clarification?.question ?? ""),
+        missingFields: normalizedMissingFields.length > 0 ? normalizedMissingFields : ["intent"],
+        question: normalizedQuestion || "Can you clarify what you want to do?",
       },
     };
   }
