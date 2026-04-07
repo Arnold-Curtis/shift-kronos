@@ -40,6 +40,21 @@ export function VoiceModal({
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
+  const getSupportedMimeType = useCallback(() => {
+    if (typeof MediaRecorder === "undefined") {
+      return undefined;
+    }
+
+    const candidates = [
+      "audio/webm;codecs=opus",
+      "audio/webm",
+      "audio/mp4",
+      "audio/ogg;codecs=opus",
+    ];
+
+    return candidates.find((value) => MediaRecorder.isTypeSupported(value));
+  }, []);
+
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === "Escape" && isOpen) {
@@ -152,6 +167,11 @@ export function VoiceModal({
 
       const result = await response.json();
 
+      if (!result.transcriptionAvailable) {
+        setErrorMessage(typeof result.message === "string" ? result.message : "Voice transcription is currently unavailable.");
+        return;
+      }
+
       if (result.transcript) {
         await onSubmit(result.transcript);
 
@@ -206,9 +226,10 @@ export function VoiceModal({
 
       visualizeAudio();
 
-      const recorder = new MediaRecorder(stream, {
-        mimeType: "audio/webm",
-      });
+      const mimeType = getSupportedMimeType();
+      const recorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
 
       const chunks: BlobPart[] = [];
 
@@ -227,7 +248,7 @@ export function VoiceModal({
           await audioContextRef.current.close();
         }
 
-        const blob = new Blob(chunks, { type: "audio/webm" });
+        const blob = new Blob(chunks, { type: recorder.mimeType || mimeType || "audio/webm" });
         await processRecording(blob);
       };
 
@@ -237,7 +258,7 @@ export function VoiceModal({
     } catch (error) {
       console.error("Failed to start recording:", error);
     }
-  }, [processRecording, visualizeAudio]);
+  }, [getSupportedMimeType, processRecording, visualizeAudio]);
 
   const handleButtonPress = useCallback(() => {
     if (isProcessing || isSpeaking) return;

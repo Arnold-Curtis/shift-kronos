@@ -34,6 +34,7 @@ export async function POST(request: Request) {
       message: result.result.message,
       kind: result.result.kind,
       conversationId: result.result.conversationId,
+      transcriptionAvailable: result.transcript.trim().length > 0,
     });
   } catch (error) {
     logError("assistant.voice.failed", {

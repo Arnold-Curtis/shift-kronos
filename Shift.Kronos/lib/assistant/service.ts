@@ -704,6 +704,24 @@ export async function runVoiceAssistantWorkflow(
     model: resolveTranscriptionModel(user),
   });
 
+  if (!transcription.available) {
+    return {
+      transcript: transcription.transcript,
+      result: {
+        kind: ASSISTANT_RESULT_KIND.CLARIFICATION,
+        action: {
+          type: ASSISTANT_ACTION_TYPE.CLARIFY_MISSING_FIELDS,
+          clarification: {
+            missingFields: ["transcript"],
+            question: transcription.message ?? "Voice transcription is currently unavailable.",
+          },
+        },
+        message: transcription.message ?? "Voice transcription is currently unavailable.",
+        conversationId: input.conversationId,
+      },
+    };
+  }
+
   return {
     transcript: transcription.transcript,
     result: await runAssistantWorkflow({

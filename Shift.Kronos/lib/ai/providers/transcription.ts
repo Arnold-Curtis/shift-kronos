@@ -3,6 +3,8 @@ import { TRANSCRIPTION_PROVIDER, TranscriptionProvider } from "@/lib/ai/preferen
 
 export type TranscriptionResult = {
   transcript: string;
+  available: boolean;
+  message?: string;
 };
 
 type AudioInput =
@@ -23,6 +25,7 @@ export async function transcribeAudioInput(args: {
   if (args.input.kind === "text") {
     return {
       transcript: args.input.text.trim(),
+      available: true,
     };
   }
 
@@ -35,7 +38,9 @@ export async function transcribeAudioInput(args: {
 
   if (isPreview && !env.GROQ_API_KEY) {
     return {
-      transcript: "Preview voice note. Transcription provider is not configured in this preview environment.",
+      transcript: "",
+      available: false,
+      message: "Automatic transcription is not configured in this preview environment yet.",
     };
   }
 
@@ -58,7 +63,9 @@ export async function transcribeAudioInput(args: {
 
       if (isPreview) {
         return {
-          transcript: "Preview voice note received, but automatic transcription is currently unavailable in this preview environment.",
+          transcript: "",
+          available: false,
+          message: "Automatic transcription is currently unavailable in this preview environment.",
         };
       }
 
@@ -74,7 +81,9 @@ export async function transcribeAudioInput(args: {
     if (!transcript) {
       if (isPreview) {
         return {
-          transcript: "Preview voice note received, but automatic transcription returned no text in this preview environment.",
+          transcript: "",
+          available: false,
+          message: "The voice note was received, but no transcript was returned in this preview environment.",
         };
       }
 
@@ -83,11 +92,14 @@ export async function transcribeAudioInput(args: {
 
     return {
       transcript,
+      available: true,
     };
   } catch (error) {
     if (isPreview) {
       return {
-        transcript: "Preview voice note received, but transcription failed in this preview environment. Please try the text chat flow for now.",
+        transcript: "",
+        available: false,
+        message: "The voice note was received, but transcription failed in this preview environment. Please use text chat for now.",
       };
     }
 
