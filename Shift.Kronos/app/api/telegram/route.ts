@@ -6,8 +6,60 @@ import { answerTelegramCallbackQuery } from "@/lib/notifications/telegram";
 import { handleTelegramCallbackAction } from "@/lib/notifications/callback-actions";
 import { runAssistantWorkflow } from "@/lib/assistant/service";
 import { ASSISTANT_INPUT_SOURCE } from "@/lib/assistant/types";
+import { getOptionalTelegramChatId } from "@/lib/operations/env";
 import { isAuthorizedTelegramWebhookRequest } from "@/lib/operations/auth";
 import { logError, logInfo, logWarn } from "@/lib/observability/logger";
+
+async function resolveTelegramUser(chatId: string) {
+  const linkedUser = await db.user.findFirst({
+    where: {
+      telegramChatId: chatId,
+    },
+  });
+
+  if (linkedUser) {
+    return linkedUser;
+  }
+
+  const fallbackChatId = getOptionalTelegramChatId();
+
+  if (!fallbackChatId || fallbackChatId !== chatId) {
+    return null;
+  }
+
+  const fallbackUser = await db.user.findFirst({
+    where: {
+      OR: [
+        {
+          clerkUserId: "preview-demo-user",
+        },
+        {
+          telegramChatId: fallbackChatId,
+        },
+      ],
+    },
+    orderBy: {
+      createdAt: "asc",
+    },
+  });
+
+  if (!fallbackUser) {
+    return null;
+  }
+
+  if (fallbackUser.telegramChatId === chatId) {
+    return fallbackUser;
+  }
+
+  return db.user.update({
+    where: {
+      id: fallbackUser.id,
+    },
+    data: {
+      telegramChatId: chatId,
+    },
+  });
+}
 
 type TelegramUpdate = {
   callback_query?: {
@@ -41,11 +93,7 @@ export async function POST(request: Request) {
 
     if (message?.text && message.chat?.id) {
       const chatId = String(message.chat.id);
-      const user = await db.user.findFirst({
-        where: {
-          telegramChatId: chatId,
-        },
-      });
+      const user = await resolveTelegramUser(chatId);
 
       if (!user) {
         logWarn("telegram.webhook.unlinked-chat", {

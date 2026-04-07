@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { GlassCard } from "@/components/ui/glass-card";
 import { AiSettingsForm } from "@/components/settings/ai-settings-form";
+import { TelegramDiagnosticsCard } from "@/components/settings/telegram-diagnostics-card";
 import { requireCurrentUser } from "@/lib/current-user";
 import { getAssistantProviderOptions, getTranscriptionProviderOptions } from "@/lib/ai/preferences";
 import {
@@ -8,6 +9,7 @@ import {
   EXPORT_FORMAT,
 } from "@/lib/export/service";
 import { getResolvedUserAiSettings } from "@/lib/settings/service";
+import { getTelegramDiagnostics } from "@/lib/notifications/diagnostics";
 import {
   User,
   Globe,
@@ -17,6 +19,7 @@ import {
   Download,
   Bot,
   ChevronRight,
+  CalendarRange,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +33,7 @@ export default async function MePage() {
   const assistantOptions = getAssistantProviderOptions();
   const transcriptionOptions = getTranscriptionProviderOptions();
   const aiSettings = getResolvedUserAiSettings(user as never);
+  const telegramDiagnostics = await getTelegramDiagnostics(user.id);
 
   return (
     <div className="space-y-6 pb-4">
@@ -97,6 +101,17 @@ export default async function MePage() {
           <ChevronRight size={16} className="text-text-tertiary" />
         </Link>
 
+        <Link href="/timetable" className="glass-interactive flex items-center gap-3 px-4 py-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-500/12">
+            <CalendarRange size={16} className="text-violet-300" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-text-primary">Timetable</p>
+            <p className="text-xs text-text-tertiary">Import classes and review schedule</p>
+          </div>
+          <ChevronRight size={16} className="text-text-tertiary" />
+        </Link>
+
         <a
           href={buildExportHref(EXPORT_DATASET.FULL, EXPORT_FORMAT.JSON)}
           className="glass-interactive flex items-center gap-3 px-4 py-3"
@@ -126,6 +141,21 @@ export default async function MePage() {
             currentAssistantModel={aiSettings.assistantModel}
             currentTranscriptionProvider={aiSettings.transcriptionProvider}
             currentTranscriptionModel={aiSettings.transcriptionModel}
+          />
+        </GlassCard>
+      </div>
+
+      <div className="space-y-3">
+        <h2 className="flex items-center gap-2 px-1 text-xs font-semibold uppercase tracking-widest text-text-tertiary">
+          <Send size={12} />
+          Telegram Delivery
+        </h2>
+        <GlassCard>
+          <TelegramDiagnosticsCard
+            userTelegramChatId={telegramDiagnostics.userTelegramChatId}
+            fallbackTelegramChatId={telegramDiagnostics.fallbackTelegramChatId}
+            resolvedTelegramChatId={telegramDiagnostics.resolvedTelegramChatId}
+            recentFailures={telegramDiagnostics.recentFailures}
           />
         </GlassCard>
       </div>

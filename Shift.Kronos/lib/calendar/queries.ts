@@ -1,5 +1,6 @@
+import { addDays, subDays } from "date-fns";
 import { getReminderCollections } from "@/lib/reminders/service";
-import { getTimetableCollections } from "@/lib/timetable/service";
+import { getTimetableOccurrencesInRange } from "@/lib/timetable/service";
 
 export type CalendarEvent = {
   id: string;
@@ -18,7 +19,10 @@ export async function getCalendarEvents(
 ): Promise<CalendarEvent[]> {
   const [reminders, timetable] = await Promise.all([
     getReminderCollections(userId),
-    getTimetableCollections(userId, now),
+    getTimetableOccurrencesInRange(userId, {
+      start: subDays(now, 30),
+      end: addDays(now, 180),
+    }),
   ]);
 
   const reminderEvents: CalendarEvent[] = [
@@ -37,10 +41,7 @@ export async function getCalendarEvents(
       status: r.status,
     }));
 
-  const timetableEvents: CalendarEvent[] = [
-    ...timetable.weekly,
-    ...timetable.upcoming,
-  ].map((entry) => ({
+  const timetableEvents: CalendarEvent[] = timetable.map((entry) => ({
     id: `tt-${entry.entryId}-${entry.startsAt.toISOString()}`,
     kind: "class" as const,
     title: entry.subject,

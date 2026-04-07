@@ -105,6 +105,25 @@ describe("notification timetable selection", () => {
       createTimetableDedupeKey("class_1", new Date("2026-04-05T09:00:00.000Z"), 30),
     );
   });
+
+  it("does not build a class alert before the lead-time threshold", () => {
+    const dueItem = buildTimetableDueItem(
+      {
+        entryId: "class_1",
+        subject: "Operating Systems",
+        location: "Hall A",
+        lecturer: null,
+        startsAt: new Date("2026-04-05T09:00:00.000Z"),
+        endsAt: new Date("2026-04-05T11:00:00.000Z"),
+        reminderLeadMinutes: 30,
+      },
+      "user_1",
+      "123456",
+      new Date("2026-04-05T08:20:00.000Z"),
+    );
+
+    expect(dueItem).toBeNull();
+  });
 });
 
 describe("telegram callback payloads", () => {

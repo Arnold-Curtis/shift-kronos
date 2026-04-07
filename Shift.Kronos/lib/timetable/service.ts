@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { addDays } from "date-fns";
 import { getWeekRange } from "@/lib/datetime";
 import { getOccurrencesForEntry } from "@/lib/timetable/occurrences";
 import {
@@ -12,6 +13,27 @@ function normalizeOptionalText(value?: string) {
   const trimmed = value?.trim();
   return trimmed ? trimmed : null;
 }
+
+export function getImportedSemesterRange(entries: TimetableImportInput["entries"]) {
+  return entries.reduce(
+    (range, entry) => ({
+      start: entry.semesterStart < range.start ? entry.semesterStart : range.start,
+      end: entry.semesterEnd > range.end ? entry.semesterEnd : range.end,
+    }),
+    {
+      start: entries[0].semesterStart,
+      end: entries[0].semesterEnd,
+    },
+  );
+}
+
+export type TimetableImportMode = "append" | "replace-semester";
+
+export type TimetableImportResult = {
+  importedCount: number;
+  replacedCount: number;
+  mode: TimetableImportMode;
+};
 
 export async function createTimetableEntry(userId: string, input: TimetableEntryInput) {
   const values = timetableEntrySchema.parse(input);
@@ -32,12 +54,38 @@ export async function createTimetableEntry(userId: string, input: TimetableEntry
   });
 }
 
-export async function importTimetableEntries(userId: string, input: TimetableImportInput) {
+export async function importTimetableEntries(
+  userId: string,
+  input: TimetableImportInput,
+  options: { mode?: TimetableImportMode } = {},
+): Promise<TimetableImportResult> {
   const values = timetableImportSchema.parse(input);
+  const mode = options.mode ?? "append";
 
-  return db.$transaction(
-    values.entries.map((entry) =>
-      db.timetableEntry.create({
+  const semesterRange = getImportedSemesterRange(values.entries);
+
+  return db.$transaction(async (tx) => {
+    let replacedCount = 0;
+
+    if (mode === "replace-semester") {
+      const deleted = await tx.timetableEntry.deleteMany({
+        where: {
+          userId,
+          semesterStart: {
+            lte: semesterRange.end,
+          },
+          semesterEnd: {
+            gte: semesterRange.start,
+          },
+        },
+      });
+
+      replacedCount = deleted.count;
+    }
+
+    await Promise.all(
+      values.entries.map((entry) =>
+        tx.timetableEntry.create({
         data: {
           userId,
           subject: entry.subject.trim(),
@@ -50,9 +98,40 @@ export async function importTimetableEntries(userId: string, input: TimetableImp
           semesterEnd: entry.semesterEnd,
           reminderLeadMinutes: entry.reminderLeadMinutes,
         },
-      }),
-    ),
-  );
+        }),
+      ),
+    );
+
+    return {
+      importedCount: values.entries.length,
+      replacedCount,
+      mode,
+    };
+  });
+}
+
+export async function getTimetableOccurrencesInRange(userId: string, range: { start: Date; end: Date }) {
+  const entries = await db.timetableEntry.findMany({
+    where: {
+      userId,
+      semesterStart: {
+        lte: range.end,
+      },
+      semesterEnd: {
+        gte: range.start,
+      },
+    },
+    orderBy: [
+      {
+        dayOfWeek: "asc",
+      },
+      {
+        startTime: "asc",
+      },
+    ],
+  });
+
+  return entries.flatMap((entry) => getOccurrencesForEntry(entry, range));
 }
 
 export async function getTimetableCollections(userId: string, now: Date = new Date()) {
@@ -76,9 +155,18 @@ export async function getTimetableCollections(userId: string, now: Date = new Da
     .filter((occurrence) => occurrence.startsAt >= now)
     .sort((left, right) => left.startsAt.getTime() - right.startsAt.getTime());
 
+  const nextSevenDays = await getTimetableOccurrencesInRange(userId, {
+    start: now,
+    end: addDays(now, 7),
+  });
+
+  const upcomingWindow = nextSevenDays
+    .filter((occurrence) => occurrence.startsAt >= now)
+    .sort((left, right) => left.startsAt.getTime() - right.startsAt.getTime());
+
   return {
     entries,
     weekly: occurrences,
-    upcoming,
+    upcoming: upcomingWindow.length > 0 ? upcomingWindow : upcoming,
   };
 }
