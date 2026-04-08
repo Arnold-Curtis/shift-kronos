@@ -1,69 +1,70 @@
-import { SectionCard } from "@/components/dashboard/section-card";
-import { ReminderBadge } from "@/components/reminders/reminder-badge";
-import { formatDateTimeLabel } from "@/lib/datetime";
+"use client";
 
-type WeekAheadReminderItem = {
-  kind: "reminder";
+import { GlassCard } from "@/components/ui/glass-card";
+
+type WeekItem = {
+  kind: "reminder" | "class";
   id: string;
   title: string;
-  dueAt: Date | null;
-  priority: "LOW" | "MEDIUM" | "HIGH";
-  description: string | null;
-};
-
-type WeekAheadClassItem = {
-  kind: "class";
-  entryId: string;
-  subject: string;
-  startsAt: Date;
-  location: string | null;
+  startsAt: Date | null;
+  detail: string | null;
 };
 
 type WeekAheadPanelProps = {
-  items: Array<WeekAheadReminderItem | WeekAheadClassItem>;
+  items: WeekItem[];
 };
 
+function groupByDay(items: WeekItem[]): Map<string, WeekItem[]> {
+  const groups = new Map<string, WeekItem[]>();
+  for (const item of items) {
+    const key = item.startsAt
+      ? item.startsAt.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })
+      : "Unscheduled";
+    const list = groups.get(key) || [];
+    list.push(item);
+    groups.set(key, list);
+  }
+  return groups;
+}
+
 export function WeekAheadPanel({ items }: WeekAheadPanelProps) {
+  if (items.length === 0) return null;
+
+  const grouped = groupByDay(items);
+
   return (
-    <SectionCard
-      title="Week-ahead preview"
-      description="The next seven days of reminders and classes from the same deterministic query layer used elsewhere in the app."
-    >
-      {items.length === 0 ? (
-        <p className="rounded-2xl border border-dashed border-border px-4 py-4 text-sm leading-6 text-foreground-muted">
-          Your week-ahead view is clear right now.
-        </p>
-      ) : (
-        <div className="space-y-3">
-          {items.map((item) => {
-            const key = item.kind === "reminder" ? item.id : item.entryId;
-            const title = item.kind === "reminder" ? item.title : item.subject;
-            const when = item.kind === "reminder" ? item.dueAt : item.startsAt;
-            const detail = item.kind === "reminder" ? item.description : item.location;
+    <div className="space-y-2 animate-fade-in">
+      <h2 className="px-1 text-xs font-semibold uppercase tracking-widest text-text-tertiary">
+        Coming Up
+      </h2>
 
-            return (
-              <article key={`${item.kind}-${key}`} className="rounded-2xl border border-border bg-black/10 px-4 py-4">
-                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <div className="flex flex-wrap gap-2">
-                      <ReminderBadge label={item.kind} />
-                      {item.kind === "reminder" ? (
-                        <ReminderBadge priority={item.priority} label={item.priority} />
-                      ) : null}
-                    </div>
-                    <h3 className="mt-3 text-base font-semibold text-foreground">{title}</h3>
-                    {detail ? <p className="mt-1 text-sm leading-6 text-foreground-muted">{detail}</p> : null}
-                  </div>
-
-                  <p className="text-sm text-foreground-muted">
-                    {when ? formatDateTimeLabel(when) : "Time pending"}
-                  </p>
+      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+        {Array.from(grouped.entries()).map(([day, dayItems]) => (
+          <GlassCard
+            key={day}
+            variant="interactive"
+            padding="sm"
+            className="min-w-[200px] shrink-0"
+          >
+            <p className="text-xs font-semibold text-accent-light">{day}</p>
+            <div className="mt-2 space-y-1.5">
+              {dayItems.slice(0, 4).map((item) => (
+                <div key={`${item.kind}-${item.id}`} className="flex items-center gap-2">
+                  <div
+                    className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                      item.kind === "class" ? "bg-blue" : "bg-accent-light"
+                    }`}
+                  />
+                  <span className="truncate text-xs text-text-primary">{item.title}</span>
                 </div>
-              </article>
-            );
-          })}
-        </div>
-      )}
-    </SectionCard>
+              ))}
+              {dayItems.length > 4 && (
+                <p className="text-[10px] text-text-tertiary">+{dayItems.length - 4} more</p>
+              )}
+            </div>
+          </GlassCard>
+        ))}
+      </div>
+    </div>
   );
 }

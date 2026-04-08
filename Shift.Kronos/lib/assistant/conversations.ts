@@ -67,6 +67,18 @@ export async function ensureConversation(userId: string, source: string, convers
   return created;
 }
 
+export async function getLatestConversationBySource(userId: string, source: string) {
+  return db.conversation.findFirst({
+    where: {
+      userId,
+      source,
+    },
+    orderBy: {
+      updatedAt: "desc",
+    },
+  });
+}
+
 export async function appendConversationMessage(
   conversationId: string,
   role: ConversationMessageRole,
@@ -132,4 +144,23 @@ export async function getConversation(userId: string, conversationId: string) {
   });
 
   return conversation ? mapConversationView(conversation) : null;
+}
+
+export async function getRecentConversationMessages(conversationId: string, limit: number = 12) {
+  return db.conversationMessage.findMany({
+    where: {
+      conversationId,
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+    take: limit,
+    select: {
+      id: true,
+      role: true,
+      content: true,
+      structuredData: true,
+      createdAt: true,
+    },
+  });
 }

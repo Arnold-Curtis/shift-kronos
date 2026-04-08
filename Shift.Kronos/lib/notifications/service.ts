@@ -1,4 +1,5 @@
 import {
+  Prisma,
   NotificationEventStatus,
   NotificationSourceType,
   ReminderStatus,
@@ -7,7 +8,6 @@ import {
 import { addMinutes, subMinutes } from "date-fns";
 import { db } from "@/lib/db";
 import { formatDateTimeLabel } from "@/lib/datetime";
-import { getServerEnv } from "@/lib/env";
 import {
   createReminderDedupeKey,
   createReminderOccurrenceKey,
@@ -28,17 +28,10 @@ import {
   TimetableDueItem,
 } from "@/lib/notifications/types";
 import { sendTelegramMessage } from "@/lib/notifications/telegram";
+import { resolveTelegramChatId } from "@/lib/notifications/diagnostics";
 import { getNextRecurringDueAt } from "@/lib/reminders/recurrence";
 import { updateReminderStatus } from "@/lib/reminders/service";
-import { getTimetableCollections } from "@/lib/timetable/service";
-
-function getFallbackChatId() {
-  return getServerEnv().TELEGRAM_CHAT_ID ?? null;
-}
-
-function resolveChatId(chatId: string | null | undefined) {
-  return chatId ?? getFallbackChatId();
-}
+import { getTimetableOccurrencesInRange } from "@/lib/timetable/service";
 
 export function getDueReminderOccurrenceDate(reminder: DueReminderRecord, now: Date) {
   if (reminder.snoozedUntil && reminder.snoozedUntil > now) {
@@ -208,7 +201,7 @@ export async function getDueReminderNotifications(now: Date = new Date()) {
   });
 
   return users.flatMap((user) => {
-    const chatId = resolveChatId(user.telegramChatId);
+    const chatId = resolveTelegramChatId(user.telegramChatId);
 
     if (!chatId) {
       return [];
@@ -231,15 +224,18 @@ export async function getDueTimetableNotifications(now: Date = new Date()) {
 
   const results = await Promise.all(
     users.map(async (user) => {
-      const chatId = resolveChatId(user.telegramChatId);
+      const chatId = resolveTelegramChatId(user.telegramChatId);
 
       if (!chatId) {
         return [] as TimetableDueItem[];
       }
 
-      const timetable = await getTimetableCollections(user.id, addMinutes(now, 7 * 24 * 60));
+      const occurrences = await getTimetableOccurrencesInRange(user.id, {
+        start: now,
+        end: addMinutes(now, 7 * 24 * 60),
+      });
 
-      return timetable.weekly
+      return occurrences
         .map((occurrence) => buildTimetableDueItem(occurrence, user.id, chatId, now))
         .filter((item): item is TimetableDueItem => item !== null);
     }),
@@ -334,6 +330,13 @@ export async function dispatchPendingNotifications(now: Date = new Date()): Prom
     try {
       reservation = await reserveNotification(dueItem);
     } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        continue;
+      }
+
       if (error instanceof Error && error.message.toLowerCase().includes("unique")) {
         continue;
       }
@@ -457,13 +460,21 @@ export async function snoozeReminderFromNotification(userId: string, reminderId:
   } satisfies TelegramCallbackActionResult;
 }
 
-export async function acknowledgeTimetableNotification(userId: string, timetableEntryId: string, occurrenceKey: string) {
+export async function acknowledgeTimetableNotification(
+  userId: string,
+  timetableEntryId: string,
+  occurrenceKey: string | null,
+) {
   const event = await db.notificationEvent.findFirst({
     where: {
       userId,
       timetableEntryId,
-      sourceOccurrenceKey: occurrenceKey,
       sourceType: NotificationSourceType.TIMETABLE,
+      ...(occurrenceKey
+        ? {
+            sourceOccurrenceKey: occurrenceKey,
+          }
+        : {}),
     },
     orderBy: {
       createdAt: "desc",

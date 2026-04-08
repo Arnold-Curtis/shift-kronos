@@ -184,25 +184,31 @@ export async function updateReminderStatus(userId: string, input: ReminderStatus
 }
 
 export async function getReminderCollections(userId: string) {
-  const reminders = await db.reminder.findMany({
-    where: {
-      userId,
-    },
-    orderBy: [
-      {
-        priority: "desc",
+  const [reminders, user] = await Promise.all([
+    db.reminder.findMany({
+      where: {
+        userId,
       },
-      {
-        dueAt: "asc",
-      },
-      {
-        createdAt: "desc",
-      },
-    ],
-  });
+      orderBy: [
+        {
+          priority: "desc",
+        },
+        {
+          dueAt: "asc",
+        },
+        {
+          createdAt: "desc",
+        },
+      ],
+    }),
+    db.user.findUnique({
+      where: { id: userId },
+      select: { timezone: true },
+    }),
+  ]);
 
   const viewModels = reminders.map(mapReminderViewModel);
-  const todayRange = startOfTodayRange();
+  const todayRange = startOfTodayRange(new Date(), user?.timezone ?? "Africa/Nairobi");
 
   return {
     inbox: viewModels.filter((reminder) => reminder.type === ReminderType.INBOX && reminder.status === ReminderStatus.ACTIVE),
@@ -252,4 +258,23 @@ export function getReminderRecurrencePayload(input: CreateReminderInput | Update
     recurrenceDays: input.recurrence.daysOfWeek,
     recurrenceEndAt: input.recurrence.endAt ?? null,
   };
+}
+
+export async function deleteReminder(userId: string, reminderId: string) {
+  const existing = await db.reminder.findFirst({
+    where: {
+      id: reminderId,
+      userId,
+    },
+  });
+
+  if (!existing) {
+    throw new Error("Reminder not found.");
+  }
+
+  return db.reminder.delete({
+    where: {
+      id: reminderId,
+    },
+  });
 }

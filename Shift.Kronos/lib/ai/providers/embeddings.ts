@@ -1,7 +1,5 @@
 import { getServerEnv } from "@/lib/env";
 
-const DEFAULT_EMBEDDING_MODEL = "text-embedding-004";
-
 export type EmbeddingResult = {
   model: string;
   dimensions: number;
@@ -28,6 +26,16 @@ function buildDeterministicTestVector(input: string, dimensions: number) {
   return values;
 }
 
+function normalizeEmbeddingModel(model: string) {
+  const trimmed = model.trim();
+
+  if (trimmed === "text-embedding-004") {
+    return "gemini-embedding-001";
+  }
+
+  return trimmed;
+}
+
 export async function generateEmbedding(input: string): Promise<EmbeddingResult> {
   const env = getServerEnv();
   const trimmed = input.trim();
@@ -40,19 +48,21 @@ export async function generateEmbedding(input: string): Promise<EmbeddingResult>
     const values = buildDeterministicTestVector(trimmed, Number(env.PHASE5_EMBEDDING_DIMENSIONS));
 
     return {
-      model: env.PHASE5_EMBEDDING_MODEL,
+      model: normalizeEmbeddingModel(env.PHASE5_EMBEDDING_MODEL),
       dimensions: values.length,
       values,
     };
   }
 
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${DEFAULT_EMBEDDING_MODEL}:embedContent?key=${env.GEMINI_API_KEY}`, {
+  const model = normalizeEmbeddingModel(env.PHASE5_EMBEDDING_MODEL);
+
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:embedContent?key=${env.GEMINI_API_KEY}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: `models/${DEFAULT_EMBEDDING_MODEL}`,
+      model: `models/${model}`,
       content: {
         parts: [
           {
@@ -64,7 +74,8 @@ export async function generateEmbedding(input: string): Promise<EmbeddingResult>
   });
 
   if (!response.ok) {
-    throw new Error(`Embedding provider request failed with status ${response.status}.`);
+    const errorBody = await response.text();
+    throw new Error(`Embedding provider request failed with status ${response.status}: ${errorBody.slice(0, 400)}`);
   }
 
   const payload = (await response.json()) as {
@@ -75,7 +86,7 @@ export async function generateEmbedding(input: string): Promise<EmbeddingResult>
   const values = assertEmbeddingVector(payload.embedding?.values);
 
   return {
-    model: DEFAULT_EMBEDDING_MODEL,
+    model,
     dimensions: values.length,
     values,
   };

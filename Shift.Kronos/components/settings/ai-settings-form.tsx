@@ -16,6 +16,7 @@ type AiSettingsFormProps = {
   currentAssistantModel: string;
   currentTranscriptionProvider: string;
   currentTranscriptionModel: string;
+  currentVoiceResponseEnabled?: boolean;
 };
 
 export function AiSettingsForm({
@@ -25,19 +26,17 @@ export function AiSettingsForm({
   currentAssistantModel,
   currentTranscriptionProvider,
   currentTranscriptionModel,
+  currentVoiceResponseEnabled = true,
 }: AiSettingsFormProps) {
   return (
-    <form action={updateUserAiSettingsAction} className="grid gap-4">
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="rounded-2xl border border-border bg-black/10 px-4 py-4">
-          <label className="text-sm font-semibold text-foreground" htmlFor="assistantProvider">
-            Assistant provider
-          </label>
+    <form action={updateUserAiSettingsAction} className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="space-y-1.5 text-sm">
+          <span className="block font-medium text-text-primary">Assistant provider</span>
           <select
-            id="assistantProvider"
             name="assistantProvider"
             defaultValue={currentAssistantProvider}
-            className="mt-3 w-full rounded-2xl border border-border bg-panel px-4 py-3 text-sm text-foreground outline-none"
+            className="input-field"
           >
             {assistantOptions.map((option) => (
               <option key={option.value} value={option.value}>
@@ -45,36 +44,27 @@ export function AiSettingsForm({
               </option>
             ))}
           </select>
-          <p className="mt-3 text-sm leading-6 text-foreground-muted">
-            Choose the model backend used for assistant chat, quick capture, and grounded answers.
-          </p>
-        </div>
+        </label>
 
-        <div className="rounded-2xl border border-border bg-black/10 px-4 py-4">
-          <label className="text-sm font-semibold text-foreground" htmlFor="assistantModel">
-            Assistant model
-          </label>
+        <label className="space-y-1.5 text-sm">
+          <span className="block font-medium text-text-primary">Assistant model</span>
           <input
-            id="assistantModel"
             name="assistantModel"
             defaultValue={currentAssistantModel}
             required
-            className="mt-3 w-full rounded-2xl border border-border bg-panel px-4 py-3 text-sm text-foreground outline-none"
+            className="input-field"
           />
-          <p className="mt-3 text-sm leading-6 text-foreground-muted">
-            Example models: {assistantOptions.flatMap((option) => option.suggestedModels).join(", ")}.
+          <p className="text-xs text-text-tertiary">
+            e.g. {assistantOptions.flatMap((o) => o.suggestedModels).slice(0, 2).join(", ")}
           </p>
-        </div>
+        </label>
 
-        <div className="rounded-2xl border border-border bg-black/10 px-4 py-4">
-          <label className="text-sm font-semibold text-foreground" htmlFor="transcriptionProvider">
-            Transcription provider
-          </label>
+        <label className="space-y-1.5 text-sm">
+          <span className="block font-medium text-text-primary">Transcription provider</span>
           <select
-            id="transcriptionProvider"
             name="transcriptionProvider"
             defaultValue={currentTranscriptionProvider}
-            className="mt-3 w-full rounded-2xl border border-border bg-panel px-4 py-3 text-sm text-foreground outline-none"
+            className="input-field"
           >
             {transcriptionOptions.map((option) => (
               <option key={option.value} value={option.value}>
@@ -82,32 +72,40 @@ export function AiSettingsForm({
               </option>
             ))}
           </select>
-          <p className="mt-3 text-sm leading-6 text-foreground-muted">
-            Recorded audio is uploaded and transcribed through this provider before entering the assistant workflow.
-          </p>
-        </div>
+        </label>
 
-        <div className="rounded-2xl border border-border bg-black/10 px-4 py-4">
-          <label className="text-sm font-semibold text-foreground" htmlFor="transcriptionModel">
-            Transcription model
-          </label>
+        <label className="space-y-1.5 text-sm">
+          <span className="block font-medium text-text-primary">Transcription model</span>
           <input
-            id="transcriptionModel"
             name="transcriptionModel"
             defaultValue={currentTranscriptionModel}
             required
-            className="mt-3 w-full rounded-2xl border border-border bg-panel px-4 py-3 text-sm text-foreground outline-none"
+            className="input-field"
           />
-          <p className="mt-3 text-sm leading-6 text-foreground-muted">
-            Example models: {transcriptionOptions.flatMap((option) => option.suggestedModels).join(", ")}.
-          </p>
-        </div>
+        </label>
+      </div>
+
+      <div className="border-t border-border-subtle pt-4">
+        <label className="flex items-center justify-between space-y-0">
+          <div className="space-y-0.5">
+            <span className="text-sm font-medium text-text-primary">Voice responses</span>
+            <p className="text-xs text-text-tertiary">
+              Speak responses back after voice input
+            </p>
+          </div>
+          <input
+            type="checkbox"
+            name="voiceResponseEnabled"
+            defaultChecked={currentVoiceResponseEnabled}
+            className="toggle"
+          />
+        </label>
       </div>
 
       <SubmitButton
-        idleLabel="Save AI settings"
-        pendingLabel="Saving AI settings"
-        className="w-full rounded-2xl bg-accent px-4 py-3 text-sm font-semibold text-white transition hover:bg-violet-500 sm:w-auto"
+        idleLabel="Save"
+        pendingLabel="Saving..."
+        className="btn-primary w-full sm:w-auto"
       />
     </form>
   );

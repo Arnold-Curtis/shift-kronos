@@ -1,4 +1,10 @@
-import { ConversationMessageRole, ReminderPriority, ReminderType, RecurrenceFrequency, RetrievalSourceType } from "@prisma/client";
+import {
+  ConversationMessageRole,
+  ReminderPriority,
+  ReminderType,
+  RecurrenceFrequency,
+  RetrievalSourceType,
+} from "@prisma/client";
 
 export const ASSISTANT_INPUT_SOURCE = {
   WEB_CAPTURE: "web-capture",
@@ -15,6 +21,8 @@ export const ASSISTANT_RESULT_KIND = {
   ANSWERED: "answered",
   CLARIFICATION: "clarification",
   REJECTED: "rejected",
+  DISAMBIGUATION: "disambiguation",
+  CONFIRMATION: "confirmation",
 } as const;
 
 export type AssistantResultKind =
@@ -22,6 +30,12 @@ export type AssistantResultKind =
 
 export const ASSISTANT_ACTION_TYPE = {
   CREATE_REMINDER: "create_reminder",
+  CREATE_NOTE: "create_note",
+  CREATE_TIMETABLE_ENTRY: "create_timetable_entry",
+  UPDATE_TIMETABLE_ENTRY: "update_timetable_entry",
+  DELETE_ENTITY: "delete_entity",
+  SEARCH_MEMORY: "search_memory",
+  DISAMBIGUATE: "disambiguate",
   ANSWER_QUESTION: "answer_question",
   CLARIFY_MISSING_FIELDS: "clarify_missing_fields",
   REJECT_REQUEST: "reject_request",
@@ -29,6 +43,15 @@ export const ASSISTANT_ACTION_TYPE = {
 
 export type AssistantActionType =
   (typeof ASSISTANT_ACTION_TYPE)[keyof typeof ASSISTANT_ACTION_TYPE];
+
+export type QueryTarget =
+  | "SCHEDULE"
+  | "MEMORY"
+  | "REMINDERS"
+  | "NOTES"
+  | "ALL";
+
+export type EntityType = "REMINDER" | "NOTE" | "TIMETABLE_ENTRY" | "CONVERSATION";
 
 export type AssistantReminderDraft = {
   title: string;
@@ -46,9 +69,40 @@ export type AssistantReminderDraft = {
   };
 };
 
+export type AssistantNoteDraft = {
+  title: string;
+  content: string;
+  tags?: string[];
+};
+
 export type AssistantQuestionAnswer = {
   summary: string;
   evidence: string[];
+  sources?: Array<{
+    type: string;
+    id: string;
+    title: string;
+  }>;
+};
+
+export type AssistantTimetableDraft = {
+  subject: string;
+  location?: string;
+  lecturer?: string;
+  dayOfWeek?: number;
+  startTime?: string;
+  endTime?: string;
+  semesterStart?: Date;
+  semesterEnd?: Date;
+  reminderLeadMinutes?: number;
+};
+
+export type AssistantTimetableUpdate = {
+  subject?: string;
+  startTime?: string;
+  endTime?: string;
+  location?: string;
+  lecturer?: string;
 };
 
 export type AssistantClarification = {
@@ -56,11 +110,62 @@ export type AssistantClarification = {
   question: string;
 };
 
+export type AssistantTimeContext = {
+  date?: Date;
+  dayOfWeek?: number;
+  timeRange?: {
+    start: string;
+    end: string;
+  };
+};
+
+export type AssistantDisambiguationOption = {
+  label: string;
+  action: AssistantAction;
+  description: string;
+};
+
 export type AssistantAction =
   | {
       type: typeof ASSISTANT_ACTION_TYPE.CREATE_REMINDER;
       reminder: AssistantReminderDraft;
-      confidence: "high" | "medium";
+      confidence: "high" | "medium" | "low";
+    }
+  | {
+      type: typeof ASSISTANT_ACTION_TYPE.CREATE_NOTE;
+      note: AssistantNoteDraft;
+      alsoCreateMemory: boolean;
+      confidence: "high" | "medium" | "low";
+    }
+  | {
+      type: typeof ASSISTANT_ACTION_TYPE.CREATE_TIMETABLE_ENTRY;
+      timetableEntry: AssistantTimetableDraft;
+      confidence: "high" | "medium" | "low";
+    }
+  | {
+      type: typeof ASSISTANT_ACTION_TYPE.UPDATE_TIMETABLE_ENTRY;
+      entryId: string;
+      updates: AssistantTimetableUpdate;
+      confidence: "high" | "medium" | "low";
+    }
+  | {
+      type: typeof ASSISTANT_ACTION_TYPE.DELETE_ENTITY;
+      entityType: EntityType;
+      entityId: string;
+      requiresConfirmation: boolean;
+      confidence: "high" | "medium" | "low";
+    }
+  | {
+      type: typeof ASSISTANT_ACTION_TYPE.SEARCH_MEMORY;
+      query: string;
+      target: QueryTarget;
+      timeContext?: AssistantTimeContext;
+      answer?: AssistantQuestionAnswer;
+    }
+  | {
+      type: typeof ASSISTANT_ACTION_TYPE.DISAMBIGUATE;
+      options: AssistantDisambiguationOption[];
+      defaultOption: number;
     }
   | {
       type: typeof ASSISTANT_ACTION_TYPE.ANSWER_QUESTION;
@@ -91,10 +196,38 @@ export type AssistantTimetableContext = {
   location: string | null;
 };
 
+export type AssistantTimetableEntryContext = {
+  id: string;
+  subject: string;
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  location?: string | null;
+  semesterStart?: Date | null;
+  semesterEnd?: Date | null;
+};
+
+export type AssistantMemoryContextItem = {
+  id: string;
+  title: string | null;
+  content: string;
+  salientFacts: string[];
+  keywords: string[];
+  entityType: string | null;
+  relatedEntityId: string | null;
+  createdAt: Date;
+};
+
+export type SemesterContext = {
+  semesterStart?: Date;
+  semesterEnd?: Date;
+};
+
 export type AssistantContext = {
   timezone: string;
   activeReminders: AssistantReminderContext[];
   upcomingClasses: AssistantTimetableContext[];
+  timetableEntries?: AssistantTimetableEntryContext[];
   knowledgeHighlights: {
     sourceType: RetrievalSourceType;
     sourceId: string;
@@ -110,6 +243,7 @@ export type AssistantContext = {
     score: number;
     sourceType: RetrievalSourceType;
   }[];
+  recentMemoryArtifacts?: AssistantMemoryContextItem[];
   recentConversation: {
     id: string;
     role: ConversationMessageRole;
@@ -117,6 +251,7 @@ export type AssistantContext = {
     createdAt: Date;
     tokenEstimate: number;
   }[];
+  semesterContext?: SemesterContext;
   now: Date;
 };
 
@@ -131,19 +266,31 @@ export type AssistantWorkflowInput = {
 export type AssistantWorkflowResult =
   | {
       kind: typeof ASSISTANT_RESULT_KIND.EXECUTED;
-      action: Extract<AssistantAction, { type: "create_reminder" }>;
+      action: Extract<AssistantAction, { type: "create_reminder" | "create_note" | "create_timetable_entry" | "update_timetable_entry" | "delete_entity" }>;
       message: string;
       conversationId?: string;
     }
   | {
       kind: typeof ASSISTANT_RESULT_KIND.ANSWERED;
-      action: Extract<AssistantAction, { type: "answer_question" }>;
+      action: Extract<AssistantAction, { type: "answer_question" | "search_memory" }>;
       message: string;
       conversationId?: string;
     }
   | {
       kind: typeof ASSISTANT_RESULT_KIND.CLARIFICATION;
       action: Extract<AssistantAction, { type: "clarify_missing_fields" }>;
+      message: string;
+      conversationId?: string;
+    }
+  | {
+      kind: typeof ASSISTANT_RESULT_KIND.DISAMBIGUATION;
+      action: Extract<AssistantAction, { type: "disambiguate" }>;
+      message: string;
+      conversationId?: string;
+    }
+  | {
+      kind: typeof ASSISTANT_RESULT_KIND.CONFIRMATION;
+      action: AssistantAction;
       message: string;
       conversationId?: string;
     }
@@ -167,4 +314,15 @@ export type ConversationView = {
   source: string;
   updatedAt: Date;
   messages: ConversationMessageView[];
+};
+
+export type ActionResult = {
+  success: boolean;
+  message: string;
+  data?: unknown;
+  awaitingConfirmation?: boolean;
+  pendingAction?: AssistantAction;
+  missingFields?: string[];
+  options?: AssistantDisambiguationOption[];
+  defaultOption?: number;
 };

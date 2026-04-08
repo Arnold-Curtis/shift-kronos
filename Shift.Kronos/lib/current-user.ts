@@ -2,7 +2,16 @@ import { auth, currentUser } from "@clerk/nextjs/server";
 import { User } from "@prisma/client";
 import { db } from "@/lib/db";
 
-const DEFAULT_TIMEZONE = "Africa/Lagos";
+const DEFAULT_TIMEZONE = "Africa/Nairobi";
+const PREVIEW_DEMO_CLERK_ID = "preview-demo-user";
+
+function shouldBypassClerk() {
+  if (process.env.VERCEL_ENV === "preview") {
+    return true;
+  }
+
+  return !process.env.CLERK_SECRET_KEY || !process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+}
 
 function getPreferredDisplayName(user: Awaited<ReturnType<typeof currentUser>>) {
   if (!user) {
@@ -15,6 +24,22 @@ function getPreferredDisplayName(user: Awaited<ReturnType<typeof currentUser>>) 
 }
 
 export async function requireCurrentUser(): Promise<User> {
+  if (shouldBypassClerk()) {
+    return db.user.upsert({
+      where: {
+        clerkUserId: PREVIEW_DEMO_CLERK_ID,
+      },
+      update: {
+        timezone: DEFAULT_TIMEZONE,
+      },
+      create: {
+        clerkUserId: PREVIEW_DEMO_CLERK_ID,
+        displayName: "Preview User",
+        timezone: DEFAULT_TIMEZONE,
+      },
+    });
+  }
+
   const session = await auth();
 
   if (!session.userId) {
@@ -43,6 +68,14 @@ export async function requireCurrentUser(): Promise<User> {
 }
 
 export async function getCurrentUser() {
+  if (shouldBypassClerk()) {
+    return db.user.findUnique({
+      where: {
+        clerkUserId: PREVIEW_DEMO_CLERK_ID,
+      },
+    });
+  }
+
   const session = await auth();
 
   if (!session.userId) {

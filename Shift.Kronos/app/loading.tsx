@@ -1,12 +1,18 @@
-import { LoadingCard } from "@/components/feedback/loading-card";
+import { SkeletonCard, Skeleton } from "@/components/ui/skeleton";
 
-export default function Loading() {
+export default function HomeLoading() {
   return (
-    <div className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-4 py-6 sm:px-6 lg:px-8">
-      <LoadingCard
-        title="Loading your current Shift:Kronos workspace"
-        description="Phase 7 adds explicit loading states so schedule, reminders, and knowledge surfaces do not fail silently while authenticated data is being assembled."
-      />
+    <div className="space-y-6 pb-4">
+      <div className="space-y-2 py-2">
+        <Skeleton className="h-7 w-48" />
+        <Skeleton className="h-4 w-64" />
+      </div>
+      <Skeleton className="h-11 w-full rounded-xl" />
+      <div className="space-y-2">
+        <SkeletonCard />
+        <SkeletonCard />
+        <SkeletonCard />
+      </div>
     </div>
   );
 }

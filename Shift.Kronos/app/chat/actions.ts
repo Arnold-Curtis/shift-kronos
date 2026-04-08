@@ -2,11 +2,17 @@
 
 import { revalidatePath } from "next/cache";
 import { requireCurrentUser } from "@/lib/current-user";
+import { getLatestConversationBySource } from "@/lib/assistant/conversations";
 import { assistantChatInputSchema, assistantQuickCaptureSchema, assistantVoiceInputSchema } from "@/lib/assistant/schemas";
 import { runAssistantWorkflow, runVoiceAssistantWorkflow } from "@/lib/assistant/service";
 import { ASSISTANT_INPUT_SOURCE } from "@/lib/assistant/types";
+import { AssistantActionState, INITIAL_ASSISTANT_ACTION_STATE } from "@/app/chat/action-state";
 
-export async function submitChatMessageAction(formData: FormData) {
+export async function submitChatMessageAction(
+  _previousState: AssistantActionState = INITIAL_ASSISTANT_ACTION_STATE,
+  formData: FormData,
+): Promise<AssistantActionState> {
+  void _previousState;
   const user = await requireCurrentUser();
   const result = assistantChatInputSchema.safeParse({
     message: String(formData.get("message") ?? ""),
@@ -14,12 +20,15 @@ export async function submitChatMessageAction(formData: FormData) {
   });
 
   if (!result.success) {
-    return;
+    return {
+      status: "error",
+      message: "Enter a valid chat message before sending it to the assistant.",
+    };
   }
 
   const values = result.data;
 
-  await runAssistantWorkflow({
+  const workflowResult = await runAssistantWorkflow({
     userId: user.id,
     input: values.message,
     source: ASSISTANT_INPUT_SOURCE.WEB_CHAT,
@@ -29,50 +38,94 @@ export async function submitChatMessageAction(formData: FormData) {
   revalidatePath("/chat");
   revalidatePath("/");
   revalidatePath("/reminders");
+
+  return {
+    status: "success",
+    kind: workflowResult.kind,
+    message: workflowResult.message,
+    conversationId: workflowResult.conversationId ?? values.conversationId,
+  };
 }
 
-export async function submitQuickCaptureAction(formData: FormData) {
+export async function submitQuickCaptureAction(
+  _previousState: AssistantActionState,
+  formData: FormData,
+): Promise<AssistantActionState> {
+  void _previousState;
   const user = await requireCurrentUser();
   const result = assistantQuickCaptureSchema.safeParse({
     input: String(formData.get("input") ?? ""),
+    conversationId: String(formData.get("conversationId") ?? "") || undefined,
   });
 
   if (!result.success) {
-    return;
+    return {
+      status: "error",
+      message: "Enter a valid quick-capture request before sending it to the assistant.",
+    };
   }
 
   const values = result.data;
+  const existingConversation = values.conversationId
+    ? { id: values.conversationId }
+    : await getLatestConversationBySource(user.id, ASSISTANT_INPUT_SOURCE.WEB_CAPTURE);
 
-  await runAssistantWorkflow({
+  const workflowResult = await runAssistantWorkflow({
     userId: user.id,
     input: values.input,
     source: ASSISTANT_INPUT_SOURCE.WEB_CAPTURE,
+    conversationId: existingConversation?.id,
   });
 
   revalidatePath("/");
   revalidatePath("/reminders");
   revalidatePath("/chat");
+
+  return {
+    status: "success",
+    kind: workflowResult.kind,
+    message: workflowResult.message,
+    conversationId: workflowResult.conversationId,
+  };
 }
 
-export async function submitVoiceCaptureAction(formData: FormData) {
+export async function submitVoiceCaptureAction(
+  _previousState: AssistantActionState,
+  formData: FormData,
+): Promise<AssistantActionState> {
+  void _previousState;
   const user = await requireCurrentUser();
-  const transcript = String(formData.get("transcript") ?? "");
 
   const result = assistantVoiceInputSchema.safeParse({
-    transcript,
+    transcript: String(formData.get("transcript") ?? ""),
+    conversationId: String(formData.get("conversationId") ?? "") || undefined,
   });
 
   if (!result.success) {
-    return;
+    return {
+      status: "error",
+      message: "Provide a transcript before running the voice assistant workflow.",
+    };
   }
 
   const values = result.data;
+  const existingConversation = values.conversationId
+    ? { id: values.conversationId }
+    : await getLatestConversationBySource(user.id, ASSISTANT_INPUT_SOURCE.VOICE);
 
-  await runVoiceAssistantWorkflow(user.id, {
+  const workflowResult = await runVoiceAssistantWorkflow(user.id, {
     transcript: values.transcript,
+    conversationId: existingConversation?.id,
   });
 
   revalidatePath("/");
   revalidatePath("/reminders");
   revalidatePath("/chat");
+
+  return {
+    status: "success",
+    kind: workflowResult.result.kind,
+    message: workflowResult.result.message,
+    conversationId: workflowResult.result.conversationId,
+  };
 }

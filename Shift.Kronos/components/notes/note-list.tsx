@@ -1,90 +1,65 @@
 import { deleteNoteAction, updateNoteAction } from "@/app/notes/actions";
-import { SectionCard } from "@/components/dashboard/section-card";
 import { SubmitButton } from "@/components/forms/submit-button";
+import { GlassCard } from "@/components/ui/glass-card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Note } from "@prisma/client";
+import { FileText, Trash2 } from "lucide-react";
 
 type NoteListProps = {
   notes: Note[];
 };
 
 function formatIndexState(note: Note) {
-  if (note.indexingStatus === "INDEXED") {
-    return "Indexed for retrieval";
-  }
-
-  if (note.indexingStatus === "FAILED") {
-    return note.indexingError ?? "Indexing failed";
-  }
-
-  if (note.indexingStatus === "PENDING") {
-    return "Indexing pending";
-  }
-
-  return "Indexing unavailable";
+  if (note.indexingStatus === "INDEXED") return "Indexed";
+  if (note.indexingStatus === "FAILED") return "Index failed";
+  if (note.indexingStatus === "PENDING") return "Pending";
+  return "N/A";
 }
 
 export function NoteList({ notes }: NoteListProps) {
-  return (
-    <SectionCard
-      title="Stored notes"
-      description="Each saved note remains directly manageable in the app while also feeding the semantic retrieval layer."
-    >
-      <div className="space-y-4">
-        {notes.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-border px-4 py-4 text-sm text-foreground-muted">
-            No notes yet. Create one above to start building retrieval-backed knowledge.
-          </p>
-        ) : (
-          notes.map((note) => (
-            <article key={note.id} className="rounded-2xl border border-border bg-black/10 px-4 py-4">
-              <form action={updateNoteAction} className="grid gap-3">
-                <input type="hidden" name="id" value={note.id} />
-                <input
-                  name="title"
-                  defaultValue={note.title}
-                  className="w-full rounded-2xl border border-border bg-panel px-4 py-3 text-sm text-foreground outline-none"
-                />
-                <textarea
-                  name="summary"
-                  rows={2}
-                  defaultValue={note.summary ?? ""}
-                  className="w-full rounded-2xl border border-border bg-panel px-4 py-3 text-sm text-foreground outline-none"
-                />
-                <textarea
-                  name="content"
-                  rows={7}
-                  defaultValue={note.content}
-                  className="w-full rounded-2xl border border-border bg-panel px-4 py-3 text-sm text-foreground outline-none"
-                />
-                <input
-                  name="tags"
-                  defaultValue={note.tags.join(", ")}
-                  className="w-full rounded-2xl border border-border bg-panel px-4 py-3 text-sm text-foreground outline-none"
-                />
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <p className="text-xs uppercase tracking-[0.18em] text-accent">{formatIndexState(note)}</p>
-                  <div className="flex flex-col gap-3 sm:flex-row">
-                    <SubmitButton
-                      idleLabel="Update note"
-                      pendingLabel="Updating note"
-                      className="rounded-2xl bg-accent px-4 py-3 text-sm font-semibold text-white transition hover:bg-violet-500"
-                    />
-                  </div>
-                </div>
-              </form>
+  if (notes.length === 0) {
+    return (
+      <GlassCard>
+        <EmptyState icon={FileText} title="No notes yet" subtitle="Create one above to get started." />
+      </GlassCard>
+    );
+  }
 
-              <form action={deleteNoteAction} className="mt-3">
-                <input type="hidden" name="id" value={note.id} />
+  return (
+    <div className="space-y-3">
+      {notes.map((note) => (
+        <GlassCard key={note.id} variant="interactive">
+          <form action={updateNoteAction} className="space-y-3">
+            <input type="hidden" name="id" value={note.id} />
+            <input name="title" defaultValue={note.title} className="input-field text-sm font-semibold" />
+            <textarea name="summary" rows={2} defaultValue={note.summary ?? ""} className="input-field text-sm" />
+            <textarea name="content" rows={5} defaultValue={note.content} className="input-field text-sm" />
+            <input name="tags" defaultValue={note.tags.join(", ")} className="input-field text-sm" />
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-[10px] font-medium uppercase tracking-widest text-text-tertiary">
+                {formatIndexState(note)}
+              </span>
+              <div className="flex gap-2">
                 <SubmitButton
-                  idleLabel="Delete note"
-                  pendingLabel="Deleting note"
-                  className="rounded-2xl border border-border px-4 py-3 text-sm font-semibold text-foreground-muted transition hover:border-white/20 hover:text-foreground"
+                  idleLabel="Update"
+                  pendingLabel="Saving..."
+                  className="btn-primary text-xs py-2 px-3"
                 />
-              </form>
-            </article>
-          ))
-        )}
-      </div>
-    </SectionCard>
+              </div>
+            </div>
+          </form>
+          <form action={deleteNoteAction} className="mt-2">
+            <input type="hidden" name="id" value={note.id} />
+            <button
+              type="submit"
+              className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs text-text-tertiary transition hover:bg-danger-muted hover:text-danger"
+            >
+              <Trash2 size={12} />
+              Delete
+            </button>
+          </form>
+        </GlassCard>
+      ))}
+    </div>
   );
 }

@@ -1,4 +1,4 @@
-import { getServerEnv } from "@/lib/env";
+import { getTelegramBotToken } from "@/lib/operations/env";
 import { TelegramSendMessageInput, TelegramSendMessageResult } from "@/lib/notifications/types";
 import { logWarn } from "@/lib/observability/logger";
 
@@ -11,8 +11,8 @@ type TelegramApiResponse = {
 };
 
 export async function sendTelegramMessage(input: TelegramSendMessageInput): Promise<TelegramSendMessageResult> {
-  const env = getServerEnv();
-  const response = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+  const botToken = getTelegramBotToken();
+  const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -51,9 +51,9 @@ export async function sendTelegramMessage(input: TelegramSendMessageInput): Prom
 }
 
 export async function answerTelegramCallbackQuery(callbackQueryId: string, text: string) {
-  const env = getServerEnv();
+  const botToken = getTelegramBotToken();
 
-  const response = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/answerCallbackQuery`, {
+  const response = await fetch(`https://api.telegram.org/bot${botToken}/answerCallbackQuery`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

@@ -126,7 +126,7 @@ export type TelegramCallbackPayload =
       version: typeof TELEGRAM_CALLBACK_VERSION;
       action: typeof TELEGRAM_ACTIONS.ACK_TIMETABLE;
       timetableEntryId: string;
-      occurrenceKey: string;
+      occurrenceKey?: string;
     };
 
 export type TelegramSendMessageInput = {

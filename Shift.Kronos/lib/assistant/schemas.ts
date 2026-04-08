@@ -2,6 +2,8 @@ import { ReminderPriority, ReminderType, RecurrenceFrequency } from "@prisma/cli
 import { z } from "zod";
 import { ASSISTANT_ACTION_TYPE } from "@/lib/assistant/types";
 
+const timeSchema = z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/);
+
 const reminderDraftSchema = z.object({
   title: z.string().trim().min(1).max(160),
   description: z.string().trim().max(2000).optional(),
@@ -20,6 +22,58 @@ const reminderDraftSchema = z.object({
     .optional(),
 });
 
+const noteDraftSchema = z.object({
+  title: z.string().trim().min(1).max(160),
+  content: z.string().trim().min(1).max(4000),
+  tags: z.array(z.string().trim().min(1).max(40)).max(12).optional(),
+});
+
+const timetableDraftSchema = z.object({
+  subject: z.string().trim().min(1).max(160),
+  location: z.string().trim().max(160).optional(),
+  lecturer: z.string().trim().max(160).optional(),
+  dayOfWeek: z.number().int().min(1).max(7).optional(),
+  startTime: timeSchema.optional(),
+  endTime: timeSchema.optional(),
+  semesterStart: z.coerce.date().optional(),
+  semesterEnd: z.coerce.date().optional(),
+  reminderLeadMinutes: z.number().int().min(0).max(1440).optional(),
+});
+
+const timetableUpdateSchema = z.object({
+  subject: z.string().trim().min(1).max(160).optional(),
+  startTime: timeSchema.optional(),
+  endTime: timeSchema.optional(),
+  location: z.string().trim().max(160).optional(),
+  lecturer: z.string().trim().max(160).optional(),
+});
+
+const answerSchema = z.object({
+  summary: z.string().trim().min(1).max(2000),
+  evidence: z.array(z.string().trim().min(1).max(240)).max(8),
+  sources: z
+    .array(
+      z.object({
+        type: z.string().trim().min(1).max(80),
+        id: z.string().trim().min(1).max(191),
+        title: z.string().trim().min(1).max(240),
+      }),
+    )
+    .max(8)
+    .optional(),
+});
+
+const timeContextSchema = z.object({
+  date: z.coerce.date().optional(),
+  dayOfWeek: z.number().int().min(1).max(7).optional(),
+  timeRange: z
+    .object({
+      start: timeSchema,
+      end: timeSchema,
+    })
+    .optional(),
+});
+
 export const assistantParseResultSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal(ASSISTANT_ACTION_TYPE.CREATE_REMINDER),
@@ -27,11 +81,53 @@ export const assistantParseResultSchema = z.discriminatedUnion("type", [
     reminder: reminderDraftSchema,
   }),
   z.object({
+    type: z.literal(ASSISTANT_ACTION_TYPE.CREATE_NOTE),
+    confidence: z.enum(["high", "medium", "low"]),
+    note: noteDraftSchema,
+    alsoCreateMemory: z.boolean().default(true),
+  }),
+  z.object({
+    type: z.literal(ASSISTANT_ACTION_TYPE.CREATE_TIMETABLE_ENTRY),
+    confidence: z.enum(["high", "medium", "low"]),
+    timetableEntry: timetableDraftSchema,
+  }),
+  z.object({
+    type: z.literal(ASSISTANT_ACTION_TYPE.UPDATE_TIMETABLE_ENTRY),
+    confidence: z.enum(["high", "medium", "low"]),
+    entryId: z.string().trim().min(1).max(191),
+    updates: timetableUpdateSchema,
+  }),
+  z.object({
+    type: z.literal(ASSISTANT_ACTION_TYPE.DELETE_ENTITY),
+    confidence: z.enum(["high", "medium", "low"]),
+    entityType: z.enum(["REMINDER", "NOTE", "TIMETABLE_ENTRY", "CONVERSATION"]),
+    entityId: z.string().trim().min(1).max(191),
+    requiresConfirmation: z.boolean().default(true),
+  }),
+  z.object({
+    type: z.literal(ASSISTANT_ACTION_TYPE.SEARCH_MEMORY),
+    query: z.string().trim().min(1).max(400),
+    target: z.enum(["SCHEDULE", "MEMORY", "REMINDERS", "NOTES", "ALL"]),
+    timeContext: timeContextSchema.optional(),
+    answer: answerSchema.optional(),
+  }),
+  z.object({
+    type: z.literal(ASSISTANT_ACTION_TYPE.DISAMBIGUATE),
+    options: z
+      .array(
+        z.object({
+          label: z.string().trim().min(1).max(80),
+          description: z.string().trim().min(1).max(240),
+          action: z.unknown(),
+        }),
+      )
+      .min(1)
+      .max(6),
+    defaultOption: z.number().int().min(0).max(5),
+  }),
+  z.object({
     type: z.literal(ASSISTANT_ACTION_TYPE.ANSWER_QUESTION),
-    answer: z.object({
-      summary: z.string().trim().min(1).max(2000),
-      evidence: z.array(z.string().trim().min(1).max(240)).max(8),
-    }),
+    answer: answerSchema,
   }),
   z.object({
     type: z.literal(ASSISTANT_ACTION_TYPE.CLARIFY_MISSING_FIELDS),
@@ -53,10 +149,12 @@ export const assistantChatInputSchema = z.object({
 
 export const assistantVoiceInputSchema = z.object({
   transcript: z.string().trim().min(1).max(8000),
+  conversationId: z.string().trim().min(1).optional(),
 });
 
 export const assistantQuickCaptureSchema = z.object({
   input: z.string().trim().min(1).max(1000),
+  conversationId: z.string().trim().min(1).optional(),
 });
 
 export function buildAssistantFallbackReminder(input: string) {

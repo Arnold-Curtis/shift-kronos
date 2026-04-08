@@ -1,13 +1,22 @@
 import { timingSafeEqual } from "node:crypto";
-import { getServerEnv } from "@/lib/env";
+import { getCronSecret, getTelegramWebhookSecret } from "@/lib/operations/env";
 
 function toBuffer(value: string) {
   return Buffer.from(value, "utf8");
 }
 
+function isVercelCronRequest(request: Request) {
+  const userAgent = request.headers.get("user-agent")?.trim().toLowerCase();
+  return userAgent === "vercel-cron/1.0";
+}
+
 export function isAuthorizedCronRequest(request: Request) {
+  if (isVercelCronRequest(request)) {
+    return true;
+  }
+
   const headerValue = request.headers.get("x-cron-secret") ?? request.headers.get("authorization");
-  const expectedSecret = getServerEnv().PHASE7_CRON_SECRET;
+  const expectedSecret = getCronSecret();
 
   if (!headerValue) {
     return false;
@@ -26,7 +35,7 @@ export function isAuthorizedCronRequest(request: Request) {
 
 export function isAuthorizedTelegramWebhookRequest(request: Request) {
   const headerValue = request.headers.get("x-telegram-bot-api-secret-token");
-  const expectedSecret = getServerEnv().PHASE7_TELEGRAM_WEBHOOK_SECRET;
+  const expectedSecret = getTelegramWebhookSecret();
 
   if (!headerValue) {
     return false;

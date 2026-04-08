@@ -1,5 +1,7 @@
-import { SectionCard } from "@/components/dashboard/section-card";
-import { formatDateTimeLabel } from "@/lib/datetime";
+import { GlassCard } from "@/components/ui/glass-card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { TimeLabel } from "@/components/ui/time-label";
+import { Clock } from "lucide-react";
 
 type AgendaItem = {
   kind: "reminder" | "class";
@@ -13,31 +15,72 @@ type LiveAgendaProps = {
   items: AgendaItem[];
 };
 
+const kindStyles = {
+  reminder: {
+    dot: "bg-accent-light",
+    badge: "bg-accent-muted text-accent-light",
+    label: "Reminder",
+  },
+  class: {
+    dot: "bg-blue",
+    badge: "bg-blue-muted text-blue",
+    label: "Class",
+  },
+};
+
 export function LiveAgenda({ items }: LiveAgendaProps) {
+  if (items.length === 0) {
+    return (
+      <GlassCard>
+        <EmptyState
+          icon={Clock}
+          title="Nothing scheduled today"
+          subtitle="Use the mic button or type above to add something."
+        />
+      </GlassCard>
+    );
+  }
+
   return (
-    <SectionCard title="Today's agenda" description="Classes and reminders are merged into one deterministic daily view.">
-      {items.length === 0 ? (
-        <p className="rounded-2xl border border-dashed border-border px-4 py-4 text-sm leading-6 text-foreground-muted">
-          Nothing is scheduled for today yet.
-        </p>
-      ) : (
-        <div className="space-y-3">
-          {items.map((item) => (
-            <article key={`${item.kind}-${item.id}`} className="rounded-2xl border border-border bg-black/10 px-4 py-4">
-              <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.18em] text-accent">{item.kind}</p>
-                  <h3 className="mt-2 text-base font-semibold text-foreground">{item.title}</h3>
-                  {item.detail ? <p className="mt-1 text-sm text-foreground-muted">{item.detail}</p> : null}
+    <div className="space-y-2 animate-fade-in">
+      <h2 className="px-1 text-xs font-semibold uppercase tracking-widest text-text-tertiary">
+        Today
+      </h2>
+      <div className="space-y-2">
+        {items.map((item, i) => {
+          const style = kindStyles[item.kind];
+          return (
+            <GlassCard
+              key={`${item.kind}-${item.id}`}
+              variant="interactive"
+              className="animate-fade-in"
+              style={{ animationDelay: `${i * 50}ms` } as React.CSSProperties}
+            >
+              <div className="flex items-start gap-3">
+                <div className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${style.dot}`} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-semibold text-text-primary truncate">
+                      {item.title}
+                    </h3>
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${style.badge}`}>
+                      {style.label}
+                    </span>
+                  </div>
+                  {item.detail && (
+                    <p className="mt-0.5 text-xs text-text-tertiary truncate">{item.detail}</p>
+                  )}
                 </div>
-                <p className="text-sm text-foreground-muted">
-                  {item.startsAt ? formatDateTimeLabel(item.startsAt) : "Time pending"}
-                </p>
+                <TimeLabel
+                  date={item.startsAt}
+                  className="shrink-0 text-xs font-medium text-text-secondary"
+                  fallback="No time"
+                />
               </div>
-            </article>
-          ))}
-        </div>
-      )}
-    </SectionCard>
+            </GlassCard>
+          );
+        })}
+      </div>
+    </div>
   );
 }

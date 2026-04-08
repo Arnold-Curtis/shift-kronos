@@ -1,95 +1,81 @@
 import Link from "next/link";
 import { StoredFile } from "@prisma/client";
 import { deleteStoredFileAction } from "@/app/files/actions";
-import { SectionCard } from "@/components/dashboard/section-card";
-import { SubmitButton } from "@/components/forms/submit-button";
+import { GlassCard } from "@/components/ui/glass-card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { FolderOpen, ExternalLink, Trash2 } from "lucide-react";
 
 type FileListProps = {
   files: StoredFile[];
 };
 
-function formatState(status: StoredFile["indexingStatus"], error: string | null) {
-  if (status === "INDEXED") {
-    return "Indexed for retrieval";
-  }
-
-  if (status === "FAILED") {
-    return error ?? "Indexing failed";
-  }
-
-  if (status === "UNSUPPORTED") {
-    return error ?? "Retrieval unavailable";
-  }
-
-  return "Indexing pending";
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function formatExtractionState(file: StoredFile) {
-  if (file.extractionStatus === "INDEXED") {
-    return "Text extracted";
-  }
-
-  if (file.extractionStatus === "FAILED") {
-    return file.extractionError ?? "Extraction failed";
-  }
-
-  if (file.extractionStatus === "UNSUPPORTED") {
-    return file.extractionError ?? "Extraction unavailable";
-  }
-
-  return "Extraction pending";
+function getStatusBadge(status: string) {
+  if (status === "INDEXED") return "text-success bg-success-muted";
+  if (status === "FAILED") return "text-danger bg-danger-muted";
+  if (status === "PENDING") return "text-warning bg-warning-muted";
+  return "text-text-tertiary bg-bg-surface";
 }
 
 export function FileList({ files }: FileListProps) {
+  if (files.length === 0) {
+    return (
+      <GlassCard>
+        <EmptyState icon={FolderOpen} title="No files uploaded" subtitle="Upload a file above to get started." />
+      </GlassCard>
+    );
+  }
+
   return (
-    <SectionCard
-      title="Stored files"
-      description="File records preserve metadata, extraction output, and semantic indexing state rather than hiding processing behind upload alone."
-    >
-      <div className="space-y-4">
-        {files.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-border px-4 py-4 text-sm text-foreground-muted">
-            No files uploaded yet.
-          </p>
-        ) : (
-          files.map((file) => (
-            <article key={file.id} className="rounded-2xl border border-border bg-black/10 px-4 py-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div className="space-y-2">
-                  <p className="text-sm font-semibold text-foreground">{file.originalFilename}</p>
-                  <p className="text-sm text-foreground-muted">{file.contentType} · {file.byteSize} bytes</p>
-                  <p className="text-xs uppercase tracking-[0.18em] text-accent">{formatExtractionState(file)}</p>
-                  <p className="text-xs uppercase tracking-[0.18em] text-accent">{formatState(file.indexingStatus, file.indexingError)}</p>
-                </div>
-
-                <Link
-                  href={file.blobUrl}
-                  target="_blank"
-                  className="rounded-2xl border border-border px-4 py-3 text-sm font-semibold text-foreground-muted transition hover:border-white/20 hover:text-foreground"
-                >
-                  Open file
-                </Link>
+    <div className="space-y-2">
+      {files.map((file) => (
+        <GlassCard key={file.id} variant="interactive">
+          <div className="flex items-start gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-muted">
+              <FolderOpen size={16} className="text-blue" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h4 className="truncate text-sm font-medium text-text-primary">
+                {file.originalFilename}
+              </h4>
+              <p className="mt-0.5 text-xs text-text-tertiary">
+                {file.contentType} · {formatSize(file.byteSize)}
+              </p>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${getStatusBadge(file.extractionStatus)}`}>
+                  {file.extractionStatus === "INDEXED" ? "Extracted" : file.extractionStatus.toLowerCase()}
+                </span>
+                <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${getStatusBadge(file.indexingStatus)}`}>
+                  {file.indexingStatus === "INDEXED" ? "Indexed" : file.indexingStatus.toLowerCase()}
+                </span>
               </div>
-
-              {file.extractedText ? (
-                <div className="mt-4 rounded-2xl border border-border bg-panel px-4 py-3 text-sm leading-6 text-foreground-muted">
-                  {file.extractedText.slice(0, 400)}
-                  {file.extractedText.length > 400 ? "..." : ""}
-                </div>
-              ) : null}
-
-              <form action={deleteStoredFileAction} className="mt-4">
+            </div>
+            <div className="flex shrink-0 gap-1">
+              <Link
+                href={file.blobUrl}
+                target="_blank"
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-text-tertiary transition hover:bg-bg-surface-hover hover:text-text-primary"
+              >
+                <ExternalLink size={14} />
+              </Link>
+              <form action={deleteStoredFileAction}>
                 <input type="hidden" name="id" value={file.id} />
-                <SubmitButton
-                  idleLabel="Delete file"
-                  pendingLabel="Deleting file"
-                  className="rounded-2xl border border-border px-4 py-3 text-sm font-semibold text-foreground-muted transition hover:border-white/20 hover:text-foreground"
-                />
+                <button
+                  type="submit"
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-text-tertiary transition hover:bg-danger-muted hover:text-danger"
+                >
+                  <Trash2 size={14} />
+                </button>
               </form>
-            </article>
-          ))
-        )}
-      </div>
-    </SectionCard>
+            </div>
+          </div>
+        </GlassCard>
+      ))}
+    </div>
   );
 }

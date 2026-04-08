@@ -105,6 +105,25 @@ describe("notification timetable selection", () => {
       createTimetableDedupeKey("class_1", new Date("2026-04-05T09:00:00.000Z"), 30),
     );
   });
+
+  it("does not build a class alert before the lead-time threshold", () => {
+    const dueItem = buildTimetableDueItem(
+      {
+        entryId: "class_1",
+        subject: "Operating Systems",
+        location: "Hall A",
+        lecturer: null,
+        startsAt: new Date("2026-04-05T09:00:00.000Z"),
+        endsAt: new Date("2026-04-05T11:00:00.000Z"),
+        reminderLeadMinutes: 30,
+      },
+      "user_1",
+      "123456",
+      new Date("2026-04-05T08:20:00.000Z"),
+    );
+
+    expect(dueItem).toBeNull();
+  });
 });
 
 describe("telegram callback payloads", () => {
@@ -120,6 +139,20 @@ describe("telegram callback payloads", () => {
     const encoded = encodeTelegramCallbackPayload(payload);
     const decoded = decodeTelegramCallbackPayload(encoded);
 
+    expect(decoded).toEqual(payload);
+  });
+
+  it("encodes timetable callbacks within Telegram callback_data limits", () => {
+    const payload = {
+      version: "v1" as const,
+      action: TELEGRAM_ACTIONS.ACK_TIMETABLE,
+      timetableEntryId: "class_1234567890abcdef",
+    };
+
+    const encoded = encodeTelegramCallbackPayload(payload);
+    const decoded = decodeTelegramCallbackPayload(encoded);
+
+    expect(encoded.length).toBeLessThanOrEqual(64);
     expect(decoded).toEqual(payload);
   });
 });
@@ -199,5 +232,6 @@ describe("telegram message formatting", () => {
 
     expect(message.text).toContain("Class alert: Operating Systems");
     expect(message.inlineKeyboard?.[0]?.[0]?.text).toBe("Acknowledge");
+    expect(message.inlineKeyboard?.[0]?.[0]?.callbackData.length).toBeLessThanOrEqual(64);
   });
 });

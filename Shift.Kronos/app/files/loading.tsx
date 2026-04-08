@@ -1,18 +1,11 @@
-import { AppShell } from "@/components/layout/app-shell";
-import { LoadingCard } from "@/components/feedback/loading-card";
+import { SkeletonCard, Skeleton } from "@/components/ui/skeleton";
 
 export default function FilesLoading() {
   return (
-    <AppShell
-      title="Blob-backed file knowledge"
-      eyebrow="Phase 7"
-      description="Loading uploaded files, extraction state, and retrieval indexing state."
-      currentPath="/files"
-    >
-      <LoadingCard
-        title="Loading files"
-        description="Stored file metadata and processing state are being assembled before the route becomes interactive."
-      />
-    </AppShell>
+    <div className="space-y-4 pb-4">
+      <Skeleton className="h-6 w-32" />
+      <SkeletonCard />
+      <SkeletonCard />
+    </div>
   );
 }

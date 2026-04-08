@@ -70,25 +70,26 @@ enum MemoryArtifactStatus {
 }
 
 model User {
-  id                 String           @id @default(cuid())
-  clerkUserId        String           @unique
-  telegramChatId     String?
-  timezone           String           @default("Africa/Lagos")
-  displayName        String?
-  assistantProvider  String           @default("groq")
-  assistantModel     String?
-  transcriptionProvider String        @default("groq")
-  transcriptionModel String?
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
-  reminders          Reminder[]
-  timetableEntries   TimetableEntry[]
-  notes              Note[]
-  files              StoredFile[]
-  retrievalChunks    RetrievalChunk[]
-  memoryArtifacts    MemoryArtifact[]
-  notificationEvents NotificationEvent[]
-  conversations      Conversation[]
+  id                    String              @id @default(cuid())
+  clerkUserId           String              @unique
+  telegramChatId        String?
+  timezone              String              @default("Africa/Lagos")
+  displayName           String?
+  assistantProvider     String              @default("openrouter")
+  assistantModel        String?
+  transcriptionProvider String              @default("groq")
+  transcriptionModel    String?
+  voiceResponseEnabled  Boolean             @default(true)
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  reminders             Reminder[]
+  timetableEntries      TimetableEntry[]
+  notes                 Note[]
+  files                 StoredFile[]
+  retrievalChunks       RetrievalChunk[]
+  memoryArtifacts       MemoryArtifact[]
+  notificationEvents    NotificationEvent[]
+  conversations         Conversation[]
 }
 
 model Reminder {
@@ -174,7 +175,7 @@ model StoredFile {
 }
 
 model RetrievalChunk {
-  id                 String              @id @default(cuid())
+  id                 String                 @id @default(cuid())
   userId             String
   sourceType         RetrievalSourceType
   sourceId           String
@@ -185,9 +186,9 @@ model RetrievalChunk {
   embeddingModel     String
   embeddingDimension Int
   embedding          Unsupported("vector")?
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  user               User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([sourceType, sourceId, chunkIndex])
   @@index([userId, sourceType, sourceId])
@@ -195,85 +196,88 @@ model RetrievalChunk {
 }
 
 model MemoryArtifact {
-  id                    String               @id @default(cuid())
-  userId                String
-  conversationId        String?
-  kind                  String
-  status                MemoryArtifactStatus @default(PENDING)
-  summaryLevel          Int                  @default(1)
-  sourceReference       String?
-  title                 String?
-  content               String
-  structuredData        Json?
-  tokenEstimate         Int                  @default(0)
-  coveredFromMessageId  String?
-  coveredToMessageId    String?
-  coveredMessageCount   Int                  @default(0)
-  sourceStartedAt       DateTime?
-  sourceEndedAt         DateTime?
-  indexingStatus        IndexingStatus       @default(PENDING)
-  indexingError         String?
-  createdAt             DateTime             @default(now())
-  updatedAt             DateTime             @updatedAt
-  user                  User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  conversation          Conversation?        @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  id                   String               @id @default(cuid())
+  userId               String
+  conversationId       String?
+  kind                 String
+  status               MemoryArtifactStatus @default(PENDING)
+  summaryLevel         Int                  @default(1)
+  sourceReference      String?
+  title                String?
+  content              String
+  structuredData       Json?
+  tokenEstimate        Int                  @default(0)
+  coveredFromMessageId String?
+  coveredToMessageId   String?
+  coveredMessageCount  Int                  @default(0)
+  sourceStartedAt      DateTime?
+  sourceEndedAt        DateTime?
+  relatedEntityId      String?
+  entityType           String?
+  indexingStatus       IndexingStatus       @default(PENDING)
+  indexingError        String?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  user                 User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversation         Conversation?        @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([userId, summaryLevel])
   @@index([userId, conversationId, summaryLevel])
   @@index([userId, status, updatedAt])
   @@index([conversationId, sourceStartedAt])
+  @@index([userId, entityType, relatedEntityId])
 }
 
 model Conversation {
-  id                         String                @id @default(cuid())
-  userId                     String
-  title                      String?
-  source                     String                @default("web")
-  latestMessageAt            DateTime?
-  latestSummarizedMessageAt  DateTime?
-  summaryBackfilledAt        DateTime?
-  createdAt                  DateTime              @default(now())
-  updatedAt                  DateTime              @updatedAt
-  user                       User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  messages                   ConversationMessage[]
-  memoryArtifacts            MemoryArtifact[]
+  id                        String                @id @default(cuid())
+  userId                    String
+  title                     String?
+  source                    String                @default("web")
+  latestMessageAt           DateTime?
+  latestSummarizedMessageAt DateTime?
+  summaryBackfilledAt       DateTime?
+  createdAt                 DateTime              @default(now())
+  updatedAt                 DateTime              @updatedAt
+  user                      User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages                  ConversationMessage[]
+  memoryArtifacts           MemoryArtifact[]
 
   @@index([userId, updatedAt])
 }
 
 model ConversationMessage {
-  id                String                  @id @default(cuid())
-  conversationId    String
-  role              ConversationMessageRole
-  content           String
-  source            String?
-  structuredData    Json?
-  tokenEstimate     Int                     @default(0)
-  summarizedAt      DateTime?
-  createdAt         DateTime                @default(now())
-  conversation      Conversation            @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  id             String                  @id @default(cuid())
+  conversationId String
+  role           ConversationMessageRole
+  content        String
+  source         String?
+  structuredData Json?
+  tokenEstimate  Int                     @default(0)
+  summarizedAt   DateTime?
+  createdAt      DateTime                @default(now())
+  conversation   Conversation            @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
   @@index([conversationId, createdAt])
   @@index([conversationId, summarizedAt, createdAt])
 }
 
 model NotificationEvent {
-  id                 String                  @id @default(cuid())
-  userId             String
-  reminderId         String?
-  timetableEntryId   String?
-  sourceType         NotificationSourceType
+  id                  String                  @id @default(cuid())
+  userId              String
+  reminderId          String?
+  timetableEntryId    String?
+  sourceType          NotificationSourceType
   sourceOccurrenceKey String?
-  transport          String
-  dedupeKey          String                  @unique
-  status             NotificationEventStatus @default(PENDING)
-  providerMessageId  String?
-  failureReason      String?
-  deliveredAt        DateTime?
-  lastAttemptAt      DateTime?
-  actionedAt         DateTime?
-  createdAt          DateTime                @default(now())
-  user               User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transport           String
+  dedupeKey           String                  @unique
+  status              NotificationEventStatus @default(PENDING)
+  providerMessageId   String?
+  failureReason       String?
+  deliveredAt         DateTime?
+  lastAttemptAt       DateTime?
+  actionedAt          DateTime?
+  createdAt           DateTime                @default(now())
+  user                User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
   @@index([status, createdAt])
