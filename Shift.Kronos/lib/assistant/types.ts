@@ -196,6 +196,44 @@ export type AssistantTimetableContext = {
   location: string | null;
 };
 
+export type AssistantDerivedTimeFact = {
+  utc: string;
+  timezone: string;
+  localDateTime: string;
+  localDate: string;
+  localTime: string;
+  weekdayLocal: string;
+  isToday: boolean;
+  isTomorrow: boolean;
+  isPast: boolean;
+  isUpcoming: boolean;
+  minutesFromNow: number;
+};
+
+export type AssistantUpcomingClassFact = {
+  entryId: string;
+  subject: string;
+  location: string | null;
+  timing: AssistantDerivedTimeFact;
+};
+
+export type AssistantReminderFact = {
+  id: string;
+  title: string;
+  priority: ReminderPriority;
+  type: ReminderType;
+  category: string | null;
+  timing: AssistantDerivedTimeFact | null;
+};
+
+export type AssistantHighIntegrityFacts = {
+  currentTime: AssistantDerivedTimeFact;
+  nextClass: AssistantUpcomingClassFact | null;
+  upcomingClasses: AssistantUpcomingClassFact[];
+  nextReminder: AssistantReminderFact | null;
+  activeReminders: AssistantReminderFact[];
+};
+
 export type AssistantTimetableEntryContext = {
   id: string;
   subject: string;
@@ -227,6 +265,7 @@ export type AssistantContext = {
   timezone: string;
   activeReminders: AssistantReminderContext[];
   upcomingClasses: AssistantTimetableContext[];
+  highIntegrityFacts: AssistantHighIntegrityFacts;
   timetableEntries?: AssistantTimetableEntryContext[];
   knowledgeHighlights: {
     sourceType: RetrievalSourceType;

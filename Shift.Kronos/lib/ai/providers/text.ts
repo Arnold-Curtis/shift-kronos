@@ -85,6 +85,7 @@ function serializeContext(context: AssistantContext) {
     nowUtc: context.now.toISOString(),
     nowLocal: formatDateTimeForModel(context.now, timezone),
     currentLocalTime: formatTimeForModel(context.now, timezone),
+    highIntegrityFacts: context.highIntegrityFacts,
     activeReminders: context.activeReminders.map((item) => ({
       ...item,
       dueAt: item.dueAt ? item.dueAt.toISOString() : null,

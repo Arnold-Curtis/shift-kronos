@@ -69,10 +69,29 @@ describe("memory window selection", () => {
 describe("assistant memory-aware heuristics", () => {
   it("uses memory highlights when answering knowledge-style questions", () => {
     const result = parseAssistantIntentHeuristically("What do you remember about my revision plan?", {
-      timezone: "Africa/Lagos",
+      timezone: "Africa/Nairobi",
       now: new Date("2026-04-06T10:00:00.000Z"),
       activeReminders: [],
       upcomingClasses: [],
+      highIntegrityFacts: {
+        currentTime: {
+          utc: "2026-04-06T10:00:00.000Z",
+          timezone: "Africa/Nairobi",
+          localDateTime: "Mon, 6 Apr 2026 13:00 (Africa/Nairobi)",
+          localDate: "Mon, 6 Apr 2026",
+          localTime: "13:00",
+          weekdayLocal: "Monday",
+          isToday: true,
+          isTomorrow: false,
+          isPast: false,
+          isUpcoming: true,
+          minutesFromNow: 0,
+        },
+        nextClass: null,
+        upcomingClasses: [],
+        nextReminder: null,
+        activeReminders: [],
+      },
       knowledgeHighlights: [],
       recentConversation: [],
       memoryHighlights: [

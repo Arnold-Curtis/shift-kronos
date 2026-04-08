@@ -9,6 +9,32 @@ import { estimateTokenCountForMessages } from "@/lib/memory/tokens";
 import { logWarn } from "@/lib/observability/logger";
 import { MemoryHighlight } from "@/lib/memory/types";
 import { RetrievalMatch } from "@/lib/retrieval/types";
+import { addDaysInTimeZone, formatDateForModel, formatDateTimeForModel, formatTimeForModel } from "@/lib/datetime";
+
+function getWeekdayLabel(date: Date, timezone: string) {
+  return new Intl.DateTimeFormat("en-GB", { timeZone: timezone, weekday: "long" }).format(date);
+}
+
+function buildDerivedTimeFact(date: Date, now: Date, timezone: string) {
+  const today = formatDateForModel(now, timezone);
+  const tomorrow = formatDateForModel(addDaysInTimeZone(now, 1, timezone), timezone);
+  const localDate = formatDateForModel(date, timezone);
+  const minutesFromNow = Math.round((date.getTime() - now.getTime()) / 60000);
+
+  return {
+    utc: date.toISOString(),
+    timezone,
+    localDateTime: formatDateTimeForModel(date, timezone),
+    localDate,
+    localTime: formatTimeForModel(date, timezone),
+    weekdayLocal: getWeekdayLabel(date, timezone),
+    isToday: localDate === today,
+    isTomorrow: localDate === tomorrow,
+    isPast: date.getTime() < now.getTime(),
+    isUpcoming: date.getTime() >= now.getTime(),
+    minutesFromNow,
+  };
+}
 
 function shouldSkipSemanticRetrieval(query: string | null | undefined) {
   const normalized = query?.trim().toLowerCase();
@@ -126,6 +152,21 @@ export async function getAssistantContextForUser(
   }));
 
   const semesterContext = extractSemesterContext(timetableEntries);
+  const timezone = currentUser?.timezone ?? "Africa/Nairobi";
+  const activeReminderFacts = reminders.scheduled.slice(0, 12).map((reminder) => ({
+    id: reminder.id,
+    title: reminder.title,
+    priority: reminder.priority,
+    type: reminder.type,
+    category: reminder.category,
+    timing: reminder.dueAt ? buildDerivedTimeFact(reminder.dueAt, now, timezone) : null,
+  }));
+  const upcomingClassFacts = timetable.upcoming.slice(0, 8).map((entry) => ({
+    entryId: entry.entryId,
+    subject: entry.subject,
+    location: entry.location,
+    timing: buildDerivedTimeFact(entry.startsAt, now, timezone),
+  }));
 
   let recentMemoryArtifactsRecords: Array<{
     id: string;
@@ -178,7 +219,7 @@ export async function getAssistantContextForUser(
   });
 
   return {
-    timezone: currentUser?.timezone ?? "Africa/Nairobi",
+    timezone,
     now,
     activeReminders: reminders.scheduled.slice(0, 12).map((reminder) => ({
       id: reminder.id,
@@ -194,6 +235,13 @@ export async function getAssistantContextForUser(
       startsAt: entry.startsAt,
       location: entry.location,
     })),
+    highIntegrityFacts: {
+      currentTime: buildDerivedTimeFact(now, now, timezone),
+      nextClass: upcomingClassFacts[0] ?? null,
+      upcomingClasses: upcomingClassFacts,
+      nextReminder: activeReminderFacts.find((item) => item.timing?.isUpcoming) ?? null,
+      activeReminders: activeReminderFacts,
+    },
     timetableEntries,
     knowledgeHighlights: trimmedKnowledgeHighlights.map((match) => ({
       sourceType: match.sourceType,

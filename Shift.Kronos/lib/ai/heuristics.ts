@@ -12,8 +12,6 @@ import {
 import { AssistantAction, ASSISTANT_ACTION_TYPE, AssistantContext } from "@/lib/assistant/types";
 import {
   addDaysInTimeZone,
-  formatDateTimeLabel,
-  formatTimeLabel,
   getWeekdayFromDate,
   getZonedParts,
   makeDateInTimeZone,
@@ -328,6 +326,7 @@ function parseTimetableAction(input: string, context: AssistantContext): Assista
 function answerScheduleQuestion(input: string, context: AssistantContext): AssistantAction {
   const lower = input.toLowerCase();
   const timezone = context.timezone || "Africa/Nairobi";
+  const currentTime = context.highIntegrityFacts.currentTime;
 
   if (
     lower.includes("what time is it") ||
@@ -339,14 +338,14 @@ function answerScheduleQuestion(input: string, context: AssistantContext): Assis
     return {
       type: ASSISTANT_ACTION_TYPE.ANSWER_QUESTION,
       answer: {
-        summary: `The current time is ${formatTimeLabel(context.now, timezone)} in ${timezone}.`,
-        evidence: [`Local time: ${formatDateTimeLabel(context.now, timezone)}`],
+        summary: `The current time is ${currentTime.localTime} in ${timezone}.`,
+        evidence: [`Local time: ${currentTime.localDateTime}`],
       },
     };
   }
 
   if (lower.includes("next class") || lower.includes("what class") || lower.includes("classes")) {
-    const nextClass = context.upcomingClasses[0];
+    const nextClass = context.highIntegrityFacts.nextClass;
 
     if (!nextClass) {
       return {
@@ -361,17 +360,17 @@ function answerScheduleQuestion(input: string, context: AssistantContext): Assis
     return {
       type: ASSISTANT_ACTION_TYPE.ANSWER_QUESTION,
       answer: {
-        summary: `Your next class is ${nextClass.subject} at ${formatTimeLabel(nextClass.startsAt, timezone)}.`,
+        summary: `Your next class is ${nextClass.subject} at ${nextClass.timing.localTime}.`,
         evidence: [
           nextClass.location ? `Location: ${nextClass.location}` : "Location not set",
-          `Starts ${formatDateTimeLabel(nextClass.startsAt, timezone)}`,
+          `Starts ${nextClass.timing.localDateTime}`,
         ],
       },
     };
   }
 
   if (lower.includes("what do i have today") || lower.includes("what is due") || lower.includes("urgent")) {
-    const dueReminders = context.activeReminders.slice(0, 5);
+    const dueReminders = context.highIntegrityFacts.activeReminders.slice(0, 5);
 
     if (dueReminders.length === 0) {
       return {
@@ -388,8 +387,8 @@ function answerScheduleQuestion(input: string, context: AssistantContext): Assis
       answer: {
         summary: `You currently have ${dueReminders.length} active scheduled reminder${dueReminders.length === 1 ? "" : "s"}.`,
         evidence: dueReminders.map((reminder) =>
-          reminder.dueAt
-            ? `${reminder.title} at ${formatDateTimeLabel(reminder.dueAt, timezone)}`
+          reminder.timing
+            ? `${reminder.title} at ${reminder.timing.localDateTime}`
             : `${reminder.title} without a scheduled due time`,
         ),
       },
