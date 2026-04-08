@@ -10,6 +10,7 @@ import { logWarn } from "@/lib/observability/logger";
 import { MemoryHighlight } from "@/lib/memory/types";
 import { RetrievalMatch } from "@/lib/retrieval/types";
 import { addDaysInTimeZone, formatDateForModel, formatDateTimeForModel, formatTimeForModel } from "@/lib/datetime";
+import { extractRecentActions, resolveFollowUpTarget } from "@/lib/assistant/references";
 
 function getWeekdayLabel(date: Date, timezone: string) {
   return new Intl.DateTimeFormat("en-GB", { timeZone: timezone, weekday: "long" }).format(date);
@@ -218,6 +219,40 @@ export async function getAssistantContextForUser(
     };
   });
 
+  let recentStructuredMessages: Array<{
+    role: import("@prisma/client").ConversationMessageRole;
+    content: string;
+    structuredData: unknown;
+  }> = [];
+
+  try {
+    if (conversationId) {
+      recentStructuredMessages = await db.conversationMessage.findMany({
+        where: { conversationId },
+        orderBy: { createdAt: "desc" },
+        take: 12,
+        select: {
+          role: true,
+          content: true,
+          structuredData: true,
+        },
+      });
+    }
+  } catch {
+    recentStructuredMessages = [];
+  }
+
+  const recentActions = extractRecentActions(recentStructuredMessages, timezone);
+
+  const resolvedFollowUpTarget = query
+    ? resolveFollowUpTarget(
+        query,
+        recentActions,
+        reminders.scheduled.slice(0, 12).map((r) => ({ id: r.id, title: r.title })),
+        timetableEntries,
+      )
+    : null;
+
   return {
     timezone,
     now,
@@ -241,7 +276,9 @@ export async function getAssistantContextForUser(
       upcomingClasses: upcomingClassFacts,
       nextReminder: activeReminderFacts.find((item) => item.timing?.isUpcoming) ?? null,
       activeReminders: activeReminderFacts,
+      recentActions,
     },
+    resolvedFollowUpTarget,
     timetableEntries,
     knowledgeHighlights: trimmedKnowledgeHighlights.map((match) => ({
       sourceType: match.sourceType,

@@ -91,6 +91,7 @@ describe("assistant memory-aware heuristics", () => {
         upcomingClasses: [],
         nextReminder: null,
         activeReminders: [],
+        recentActions: [],
       },
       knowledgeHighlights: [],
       recentConversation: [],

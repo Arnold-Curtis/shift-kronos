@@ -30,7 +30,9 @@ export type AssistantResultKind =
 
 export const ASSISTANT_ACTION_TYPE = {
   CREATE_REMINDER: "create_reminder",
+  UPDATE_REMINDER: "update_reminder",
   CREATE_NOTE: "create_note",
+  UPDATE_NOTE: "update_note",
   CREATE_TIMETABLE_ENTRY: "create_timetable_entry",
   UPDATE_TIMETABLE_ENTRY: "update_timetable_entry",
   DELETE_ENTITY: "delete_entity",
@@ -97,6 +99,19 @@ export type AssistantTimetableDraft = {
   reminderLeadMinutes?: number;
 };
 
+export type AssistantReminderUpdate = {
+  title?: string;
+  description?: string;
+  priority?: ReminderPriority;
+  dueAt?: Date;
+};
+
+export type AssistantNoteUpdate = {
+  title?: string;
+  content?: string;
+  tags?: string[];
+};
+
 export type AssistantTimetableUpdate = {
   subject?: string;
   startTime?: string;
@@ -132,9 +147,21 @@ export type AssistantAction =
       confidence: "high" | "medium" | "low";
     }
   | {
+      type: typeof ASSISTANT_ACTION_TYPE.UPDATE_REMINDER;
+      reminderId: string;
+      updates: AssistantReminderUpdate;
+      confidence: "high" | "medium" | "low";
+    }
+  | {
       type: typeof ASSISTANT_ACTION_TYPE.CREATE_NOTE;
       note: AssistantNoteDraft;
       alsoCreateMemory: boolean;
+      confidence: "high" | "medium" | "low";
+    }
+  | {
+      type: typeof ASSISTANT_ACTION_TYPE.UPDATE_NOTE;
+      noteId: string;
+      updates: AssistantNoteUpdate;
       confidence: "high" | "medium" | "low";
     }
   | {
@@ -226,12 +253,22 @@ export type AssistantReminderFact = {
   timing: AssistantDerivedTimeFact | null;
 };
 
+export type AssistantRecentActionFact = {
+  actionType: string;
+  entityType: "REMINDER" | "NOTE" | "TIMETABLE_ENTRY";
+  entityId: string;
+  entityTitle: string;
+  localTimeDescription: string;
+  turnIndex: number;
+};
+
 export type AssistantHighIntegrityFacts = {
   currentTime: AssistantDerivedTimeFact;
   nextClass: AssistantUpcomingClassFact | null;
   upcomingClasses: AssistantUpcomingClassFact[];
   nextReminder: AssistantReminderFact | null;
   activeReminders: AssistantReminderFact[];
+  recentActions: AssistantRecentActionFact[];
 };
 
 export type AssistantTimetableEntryContext = {
@@ -261,12 +298,20 @@ export type SemesterContext = {
   semesterEnd?: Date;
 };
 
+export type ResolvedFollowUpTarget = {
+  entityType: "REMINDER" | "NOTE" | "TIMETABLE_ENTRY";
+  entityId: string;
+  entityTitle: string;
+  suggestedAction: "UPDATE_REMINDER" | "UPDATE_NOTE" | "UPDATE_TIMETABLE_ENTRY" | "DELETE_ENTITY";
+};
+
 export type AssistantContext = {
   timezone: string;
   activeReminders: AssistantReminderContext[];
   upcomingClasses: AssistantTimetableContext[];
   highIntegrityFacts: AssistantHighIntegrityFacts;
   timetableEntries?: AssistantTimetableEntryContext[];
+  resolvedFollowUpTarget?: ResolvedFollowUpTarget | null;
   knowledgeHighlights: {
     sourceType: RetrievalSourceType;
     sourceId: string;
@@ -305,7 +350,7 @@ export type AssistantWorkflowInput = {
 export type AssistantWorkflowResult =
   | {
       kind: typeof ASSISTANT_RESULT_KIND.EXECUTED;
-      action: Extract<AssistantAction, { type: "create_reminder" | "create_note" | "create_timetable_entry" | "update_timetable_entry" | "delete_entity" }>;
+      action: Extract<AssistantAction, { type: "create_reminder" | "update_reminder" | "create_note" | "update_note" | "create_timetable_entry" | "update_timetable_entry" | "delete_entity" }>;
       message: string;
       conversationId?: string;
     }

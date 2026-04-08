@@ -439,6 +439,93 @@ function answerKnowledgeQuestion(context: AssistantContext): AssistantAction {
   };
 }
 
+function looksLikeFollowUpUpdate(lower: string): boolean {
+  return (
+    /\b(change|update|move|shift|reschedule|modify|edit|adjust)\b/i.test(lower) ||
+    /\bto\s+\d/i.test(lower)
+  );
+}
+
+function resolveFollowUpUpdateHeuristic(input: string, context: AssistantContext): AssistantAction | null {
+  const target = context.resolvedFollowUpTarget;
+  if (!target) return null;
+
+  const lower = input.toLowerCase();
+
+  if (!looksLikeFollowUpUpdate(lower) && !/\b(it|that|this)\b/i.test(lower)) {
+    return null;
+  }
+
+  if (target.entityType === "REMINDER" && target.suggestedAction === "UPDATE_REMINDER") {
+    const timezone = context.timezone || "Africa/Nairobi";
+    const explicitTime = parseExplicitTime(lower);
+    const dueAt = explicitTime
+      ? parseDefaultExplicitDueAt(lower, context.now, timezone) ?? makeDateInTimeZone({
+          ...getZonedParts(context.now, timezone),
+          hour: explicitTime.hour,
+          minute: explicitTime.minute,
+          second: 0,
+          millisecond: 0,
+        }, timezone)
+      : undefined;
+
+    if (dueAt || lower.includes("title") || lower.includes("name") || lower.includes("priority")) {
+      const updates: Record<string, unknown> = {};
+      if (dueAt) updates.dueAt = dueAt;
+
+      const titleMatch = lower.match(/(?:title|name|call)\s+(?:to|as)\s+["']?(.+?)["']?\s*$/i);
+      if (titleMatch) updates.title = titleMatch[1];
+
+      return {
+        type: ASSISTANT_ACTION_TYPE.UPDATE_REMINDER,
+        reminderId: target.entityId,
+        updates,
+        confidence: "high",
+      };
+    }
+
+    return {
+      type: ASSISTANT_ACTION_TYPE.UPDATE_REMINDER,
+      reminderId: target.entityId,
+      updates: dueAt ? { dueAt } : {},
+      confidence: "medium",
+    };
+  }
+
+  if (target.entityType === "TIMETABLE_ENTRY" && target.suggestedAction === "UPDATE_TIMETABLE_ENTRY") {
+    const updates: Record<string, unknown> = {};
+    const explicitTime = parseExplicitTime(lower);
+
+    if (explicitTime) {
+      if (lower.includes("start") || lower.includes("from") || lower.includes("begins")) {
+        updates.startTime = `${String(explicitTime.hour).padStart(2, "0")}:${String(explicitTime.minute).padStart(2, "0")}`;
+      } else if (lower.includes("end") || lower.includes("until") || lower.includes("to")) {
+        updates.endTime = `${String(explicitTime.hour).padStart(2, "0")}:${String(explicitTime.minute).padStart(2, "0")}`;
+      } else {
+        updates.startTime = `${String(explicitTime.hour).padStart(2, "0")}:${String(explicitTime.minute).padStart(2, "0")}`;
+      }
+    }
+
+    return {
+      type: ASSISTANT_ACTION_TYPE.UPDATE_TIMETABLE_ENTRY,
+      entryId: target.entityId,
+      updates,
+      confidence: "high",
+    };
+  }
+
+  if (target.entityType === "NOTE" && target.suggestedAction === "UPDATE_NOTE") {
+    return {
+      type: ASSISTANT_ACTION_TYPE.UPDATE_NOTE,
+      noteId: target.entityId,
+      updates: {},
+      confidence: "medium",
+    };
+  }
+
+  return null;
+}
+
 export function parseAssistantIntentHeuristically(input: string, context: AssistantContext): AssistantAction {
   const normalized = normalizeInput(input);
   const lower = normalized.toLowerCase();
@@ -448,6 +535,11 @@ export function parseAssistantIntentHeuristically(input: string, context: Assist
       type: ASSISTANT_ACTION_TYPE.REJECT_REQUEST,
       reason: "A non-empty message is required.",
     };
+  }
+
+  const followUpUpdate = resolveFollowUpUpdateHeuristic(normalized, context);
+  if (followUpUpdate) {
+    return followUpUpdate;
   }
 
   if (

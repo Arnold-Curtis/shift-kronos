@@ -124,6 +124,7 @@ function serializeContext(context: AssistantContext) {
       ...item,
       createdAt: item.createdAt.toISOString(),
     })),
+    resolvedFollowUpTarget: context.resolvedFollowUpTarget ?? null,
   };
 }
 
@@ -149,8 +150,26 @@ Analyze the user's intent to determine the correct entity type:
 | "I have a class every Monday" | TIMETABLE_ENTRY | Recurring weekly pattern |
 | "note that..." / "remember that..." | NOTE | Explicit note request |
 | "my class changed..." | UPDATE_TIMETABLE_ENTRY | Modification request |
+| "change the reminder to..." | UPDATE_REMINDER | Reminder modification |
+| "update my note..." | UPDATE_NOTE | Note modification |
 | "what class do I have..." | SEARCH_MEMORY | Query, not creation |
 | "what did I say about..." | SEARCH_MEMORY | Memory recall query |
+
+### Follow-Up Resolution Rules — CRITICAL
+
+When the user says "change that to 6pm", "move it to tomorrow", "update the reminder", or similar follow-up phrases:
+
+1. **Check resolvedFollowUpTarget in the context first.** If it is present, use its entityType, entityId, and suggestedAction to determine the correct action. This is the highest-priority signal.
+
+2. **Check recentActions in highIntegrityFacts.** This lists the most recently created/updated/deleted entities in reverse chronological order. The most recent mutated entity is the default target for pronouns like "it" or "that".
+
+3. **Domain keywords override recency.** If the user says "change the reminder to 6pm" or "no, I meant the reminder", the word "reminder" overrides any other entity type. Similarly, "class" or "timetable" overrides toward TIMETABLE_ENTRY.
+
+4. **NEVER mutate a timetable entry when the user is clearly referring to a reminder.** A time-change follow-up about a reminder MUST use UPDATE_REMINDER, never UPDATE_TIMETABLE_ENTRY.
+
+5. **NEVER mutate a reminder when the user is clearly referring to a timetable entry.** A time-change follow-up about a class MUST use UPDATE_TIMETABLE_ENTRY, never UPDATE_REMINDER.
+
+6. **When the user corrects a previous mistake** (e.g., "no, I meant the reminder"), ALWAYS switch to the corrected entity type immediately.
 
 ### Time Inference
 
@@ -243,7 +262,22 @@ Output: { "type": "create_reminder", "confidence": "high", "reminder": { "title"
 ### Example 6: Memory recall
 Input: "What did I say about breakfast?"
 Context: { memoryHighlights: [{ content: "User wants to make breakfast in the morning", title: "Morning routine" }] }
-Output: { "type": "search_memory", "query": "breakfast", "target": "MEMORY", "answer": { "summary": "You mentioned wanting to make breakfast in the morning.", "evidence": ["Memory: Morning breakfast routine"], "sources": [{ "type": "MEMORY", "id": "mem123", "title": "Morning routine" }] } }`;
+Output: { "type": "search_memory", "query": "breakfast", "target": "MEMORY", "answer": { "summary": "You mentioned wanting to make breakfast in the morning.", "evidence": ["Memory: Morning breakfast routine"], "sources": [{ "type": "MEMORY", "id": "mem123", "title": "Morning routine" }] } }
+
+### Example 7: Update a reminder (follow-up)
+Input: "Change that to 6pm"
+Context: { resolvedFollowUpTarget: { entityType: "REMINDER", entityId: "rem_abc", entityTitle: "Go hit the gym", suggestedAction: "UPDATE_REMINDER" }, highIntegrityFacts: { recentActions: [{ actionType: "create_reminder", entityType: "REMINDER", entityId: "rem_abc", entityTitle: "Go hit the gym" }] } }
+Output: { "type": "update_reminder", "confidence": "high", "reminderId": "rem_abc", "updates": { "dueAt": "2026-04-08T15:00:00.000Z" } }
+
+### Example 8: Correction — user clarifies entity type
+Input: "No, I meant the reminder. Change it to 6pm."
+Context: { resolvedFollowUpTarget: { entityType: "REMINDER", entityId: "rem_abc", entityTitle: "Go hit the gym", suggestedAction: "UPDATE_REMINDER" } }
+Output: { "type": "update_reminder", "confidence": "high", "reminderId": "rem_abc", "updates": { "dueAt": "2026-04-08T15:00:00.000Z" } }
+
+### Example 9: Update a timetable entry (explicit class reference)
+Input: "Move my Monday class to 9am"
+Context: { timetableEntries: [{ id: "entry_xyz", subject: "IT Project I", dayOfWeek: 1, startTime: "08:00", endTime: "10:00" }] }
+Output: { "type": "update_timetable_entry", "confidence": "high", "entryId": "entry_xyz", "updates": { "startTime": "09:00" } }`;
 }
 
 function buildMemorySystemPrompt() {
@@ -486,6 +520,8 @@ function getAssistantActionSchema(): JsonSchemaDefinition {
           required: ["subject"],
         },
         entryId: { type: "string" },
+        reminderId: { type: "string" },
+        noteId: { type: "string" },
         updates: {
           type: "object",
           additionalProperties: false,
@@ -495,6 +531,28 @@ function getAssistantActionSchema(): JsonSchemaDefinition {
             endTime: { type: "string" },
             location: { type: "string" },
             lecturer: { type: "string" },
+          },
+        },
+        reminderUpdates: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            title: { type: "string", maxLength: 160 },
+            description: { type: "string" },
+            priority: { type: "string", enum: ["LOW", "MEDIUM", "HIGH"] },
+            dueAt: { type: "string", format: "date-time" },
+          },
+        },
+        noteUpdates: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            title: { type: "string", maxLength: 160 },
+            content: { type: "string" },
+            tags: {
+              type: "array",
+              items: { type: "string" },
+            },
           },
         },
         entityType: { type: "string", enum: ["REMINDER", "NOTE", "TIMETABLE_ENTRY"] },
@@ -739,6 +797,22 @@ function normalizeAssistantAction(output: unknown): AssistantAction {
     };
   }
 
+  if (value.type === ASSISTANT_ACTION_TYPE.UPDATE_REMINDER) {
+    const updates = value.reminderUpdates as Record<string, unknown> | undefined;
+
+    return {
+      type: ASSISTANT_ACTION_TYPE.UPDATE_REMINDER,
+      confidence: normalizeConfidence(value.confidence),
+      reminderId: String(value.reminderId ?? ""),
+      updates: {
+        title: typeof updates?.title === "string" ? updates.title : undefined,
+        description: typeof updates?.description === "string" ? updates.description : undefined,
+        priority: typeof updates?.priority === "string" ? updates.priority as ReminderPriority : undefined,
+        dueAt: typeof updates?.dueAt === "string" && updates.dueAt ? new Date(updates.dueAt) : undefined,
+      },
+    };
+  }
+
   if (value.type === ASSISTANT_ACTION_TYPE.CREATE_NOTE) {
     const note = value.note as Record<string, unknown> | undefined;
 
@@ -750,6 +824,21 @@ function normalizeAssistantAction(output: unknown): AssistantAction {
         title: String(note?.title ?? ""),
         content: String(note?.content ?? ""),
         tags: Array.isArray(note?.tags) ? note.tags.map((item) => String(item)) : undefined,
+      },
+    };
+  }
+
+  if (value.type === ASSISTANT_ACTION_TYPE.UPDATE_NOTE) {
+    const updates = value.noteUpdates as Record<string, unknown> | undefined;
+
+    return {
+      type: ASSISTANT_ACTION_TYPE.UPDATE_NOTE,
+      confidence: normalizeConfidence(value.confidence),
+      noteId: String(value.noteId ?? ""),
+      updates: {
+        title: typeof updates?.title === "string" ? updates.title : undefined,
+        content: typeof updates?.content === "string" ? updates.content : undefined,
+        tags: Array.isArray(updates?.tags) ? updates.tags.map((item) => String(item)) : undefined,
       },
     };
   }

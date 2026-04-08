@@ -19,14 +19,13 @@ import {
   AssistantWorkflowResult,
 } from "@/lib/assistant/types";
 import { processConversationMemory } from "@/lib/memory/service";
-import { createReminder } from "@/lib/reminders/service";
+import { createReminder, updateReminder, deleteReminder } from "@/lib/reminders/service";
 import { createTimetableEntry, updateTimetableEntry, deleteTimetableEntry } from "@/lib/timetable/service";
 import { db } from "@/lib/db";
 import { formatDateLabel } from "@/lib/datetime";
 import { executeSearchMemory } from "@/lib/assistant/queries";
 import { createMemoryForEntity, updateMemoryForEntity } from "@/lib/memory/dual-write";
-import { createNote, deleteNote } from "@/lib/notes/service";
-import { deleteReminder } from "@/lib/reminders/service";
+import { createNote, deleteNote, updateNote } from "@/lib/notes/service";
 
 type RecentEntityReference =
   | {
@@ -111,43 +110,48 @@ function getRecentEntityReference(
 
     const candidate = message.structuredData as Record<string, unknown>;
 
-    if (candidate.type === ASSISTANT_ACTION_TYPE.CREATE_REMINDER) {
+    if (candidate.type === ASSISTANT_ACTION_TYPE.CREATE_REMINDER || candidate.type === ASSISTANT_ACTION_TYPE.UPDATE_REMINDER) {
       const reminder = candidate.reminder as Record<string, unknown> | undefined;
+      const updates = candidate.updates as Record<string, unknown> | undefined;
+      const title = typeof reminder?.title === "string" ? reminder.title : typeof updates?.title === "string" ? updates.title : null;
 
-      if (!reminder?.title) {
+      if (!title) {
         continue;
       }
+
+      const dueAt = typeof reminder?.dueAt === "string" && reminder.dueAt ? reminder.dueAt : typeof updates?.dueAt === "string" ? updates.dueAt : null;
 
       return {
         kind: "reminder",
-        title: String(reminder.title),
-        dueAt: typeof reminder.dueAt === "string" && reminder.dueAt ? new Date(reminder.dueAt) : null,
-        priority: typeof reminder.priority === "string" ? reminder.priority : "MEDIUM",
+        title,
+        dueAt: dueAt ? new Date(dueAt) : null,
+        priority: typeof reminder?.priority === "string" ? reminder.priority : "MEDIUM",
       };
     }
 
-    if (candidate.type === ASSISTANT_ACTION_TYPE.CREATE_TIMETABLE_ENTRY) {
+    if (candidate.type === ASSISTANT_ACTION_TYPE.CREATE_TIMETABLE_ENTRY || candidate.type === ASSISTANT_ACTION_TYPE.UPDATE_TIMETABLE_ENTRY) {
       const timetableEntry = candidate.timetableEntry as Record<string, unknown> | undefined;
+      const updates = candidate.updates as Record<string, unknown> | undefined;
+      const subject = typeof timetableEntry?.subject === "string" ? timetableEntry.subject : typeof updates?.subject === "string" ? updates.subject : null;
 
-      if (
-        !timetableEntry?.subject ||
-        typeof timetableEntry.dayOfWeek !== "number" ||
-        typeof timetableEntry.startTime !== "string" ||
-        typeof timetableEntry.endTime !== "string" ||
-        typeof timetableEntry.semesterStart !== "string" ||
-        typeof timetableEntry.semesterEnd !== "string"
-      ) {
+      if (!subject) {
         continue;
       }
 
+      const startTime = typeof timetableEntry?.startTime === "string" ? timetableEntry.startTime : typeof updates?.startTime === "string" ? updates.startTime : "";
+      const endTime = typeof timetableEntry?.endTime === "string" ? timetableEntry.endTime : typeof updates?.endTime === "string" ? updates.endTime : "";
+      const dayOfWeek = typeof timetableEntry?.dayOfWeek === "number" ? timetableEntry.dayOfWeek : typeof updates?.dayOfWeek === "number" ? updates.dayOfWeek : 1;
+      const semesterStart = typeof timetableEntry?.semesterStart === "string" ? timetableEntry.semesterStart : "";
+      const semesterEnd = typeof timetableEntry?.semesterEnd === "string" ? timetableEntry.semesterEnd : "";
+
       return {
         kind: "timetable",
-        subject: String(timetableEntry.subject),
-        dayOfWeek: timetableEntry.dayOfWeek,
-        startTime: timetableEntry.startTime,
-        endTime: timetableEntry.endTime,
-        semesterStart: new Date(timetableEntry.semesterStart),
-        semesterEnd: new Date(timetableEntry.semesterEnd),
+        subject,
+        dayOfWeek,
+        startTime,
+        endTime,
+        semesterStart: semesterStart ? new Date(semesterStart) : new Date(),
+        semesterEnd: semesterEnd ? new Date(semesterEnd) : new Date(),
       };
     }
   }
@@ -171,7 +175,7 @@ function resolveRecentEntityFollowUp(
   }
 
   const referencesRecentEntity =
-    /\b(it|that|this reminder|that reminder|this class|that class)\b/i.test(normalizedInput) ||
+    /\b(it|that|this reminder|that reminder|this class|that class|this note|that note)\b/i.test(normalizedInput) ||
     lower.includes("again");
 
   if (!referencesRecentEntity) {
@@ -442,6 +446,33 @@ async function executeAction(
     };
   }
 
+  if (action.type === ASSISTANT_ACTION_TYPE.UPDATE_REMINDER) {
+    const reminder = await updateReminder(userId, {
+      id: action.reminderId,
+      ...action.updates,
+    });
+
+    await updateMemoryForEntity(reminder.id, "REMINDER", {
+      title: reminder.title,
+      content: `${reminder.title}${reminder.description ? ` - ${reminder.description}` : ""}`,
+    });
+
+    const updatedFields = Object.entries(action.updates)
+      .filter(([, value]) => value !== undefined)
+      .map(([key]) => key);
+    const message = updatedFields.length > 0
+      ? `Updated reminder "${reminder.title}": ${updatedFields.join(", ")} changed.`
+      : `No changes made to reminder "${reminder.title}".`;
+    await appendConversationMessage(conversationId, ConversationMessageRole.ASSISTANT, message, action);
+
+    return {
+      kind: ASSISTANT_RESULT_KIND.EXECUTED,
+      action,
+      message,
+      conversationId,
+    };
+  }
+
   if (action.type === ASSISTANT_ACTION_TYPE.CREATE_NOTE) {
     const note = await createNote(userId, {
       title: action.note.title,
@@ -461,6 +492,30 @@ async function executeAction(
     }
 
     const message = buildNoteCreatedMessage(action.note.title);
+    await appendConversationMessage(conversationId, ConversationMessageRole.ASSISTANT, message, action);
+
+    return {
+      kind: ASSISTANT_RESULT_KIND.EXECUTED,
+      action,
+      message,
+      conversationId,
+    };
+  }
+
+  if (action.type === ASSISTANT_ACTION_TYPE.UPDATE_NOTE) {
+    const note = await updateNote(userId, {
+      id: action.noteId,
+      title: action.updates.title ?? "",
+      content: action.updates.content ?? "",
+      tags: action.updates.tags ?? [],
+    });
+
+    const updatedFields = Object.entries(action.updates)
+      .filter(([, value]) => value !== undefined)
+      .map(([key]) => key);
+    const message = updatedFields.length > 0
+      ? `Updated note "${note.title}": ${updatedFields.join(", ")} changed.`
+      : `No changes made to note "${note.title}".`;
     await appendConversationMessage(conversationId, ConversationMessageRole.ASSISTANT, message, action);
 
     return {

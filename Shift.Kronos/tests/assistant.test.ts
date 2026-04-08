@@ -1,8 +1,9 @@
 import { ReminderPriority, ReminderType, RecurrenceFrequency, RetrievalSourceType } from "@prisma/client";
 import { describe, expect, it } from "vitest";
 import { parseAssistantIntentHeuristically } from "@/lib/ai/heuristics";
-import { ASSISTANT_ACTION_TYPE } from "@/lib/assistant/types";
+import { ASSISTANT_ACTION_TYPE, AssistantContext } from "@/lib/assistant/types";
 import { buildFollowUpInput, buildStructuredFollowUpInput } from "@/lib/assistant/service";
+import { extractRecentActions, resolveFollowUpTarget } from "@/lib/assistant/references";
 import { generateStructuredAssistantAction } from "@/lib/ai/providers/text";
 import { assistantParseResultSchema } from "@/lib/assistant/schemas";
 import { formatDateTimeForModel, formatDateTimeLabel, formatTimeForModel, formatTimeLabel } from "@/lib/datetime";
@@ -150,6 +151,7 @@ const context = {
         },
       },
     ],
+    recentActions: [],
   },
 };
 
@@ -591,5 +593,302 @@ describe("assistant heuristic parsing", () => {
     }
 
     expect(result.answer.evidence.some((item) => item.includes("Memory L1"))).toBe(true);
+  });
+});
+
+describe("follow-up entity resolution", () => {
+  const baseContext: AssistantContext = {
+    ...context,
+    activeReminders: [
+      {
+        id: "rem_gym",
+        title: "Go hit the gym",
+        dueAt: new Date("2026-04-06T15:30:00.000Z"),
+        priority: ReminderPriority.MEDIUM,
+        type: ReminderType.ONE_TIME,
+        category: null,
+      },
+      {
+        id: "rem_report",
+        title: "Finish report",
+        dueAt: new Date("2026-04-06T18:00:00.000Z"),
+        priority: ReminderPriority.HIGH,
+        type: ReminderType.ONE_TIME,
+        category: "work",
+      },
+    ],
+    timetableEntries: [
+      {
+        id: "entry_it",
+        subject: "IT Project I (Regular)",
+        dayOfWeek: 1,
+        startTime: "14:00",
+        endTime: "17:00",
+        location: null,
+        semesterStart: null,
+        semesterEnd: null,
+      },
+    ],
+  };
+
+  it("resolves 'change that to 6pm' to UPDATE_REMINDER when the last action created a reminder", () => {
+    const contextWithTarget: AssistantContext = {
+      ...baseContext,
+      resolvedFollowUpTarget: {
+        entityType: "REMINDER",
+        entityId: "rem_gym",
+        entityTitle: "Go hit the gym",
+        suggestedAction: "UPDATE_REMINDER",
+      },
+    };
+
+    const result = parseAssistantIntentHeuristically(
+      "Could we change that to 6pm please?",
+      contextWithTarget,
+    );
+
+    expect(result.type).toBe(ASSISTANT_ACTION_TYPE.UPDATE_REMINDER);
+
+    if (result.type !== ASSISTANT_ACTION_TYPE.UPDATE_REMINDER) {
+      throw new Error("Expected update_reminder action.");
+    }
+
+    expect(result.reminderId).toBe("rem_gym");
+    expect(result.updates.dueAt).toBeInstanceOf(Date);
+  });
+
+  it("does NOT produce UPDATE_TIMETABLE_ENTRY when resolvedFollowUpTarget points to a reminder", () => {
+    const contextWithTarget: AssistantContext = {
+      ...baseContext,
+      resolvedFollowUpTarget: {
+        entityType: "REMINDER",
+        entityId: "rem_gym",
+        entityTitle: "Go hit the gym",
+        suggestedAction: "UPDATE_REMINDER",
+      },
+    };
+
+    const result = parseAssistantIntentHeuristically(
+      "change it to 6pm",
+      contextWithTarget,
+    );
+
+    expect(result.type).not.toBe(ASSISTANT_ACTION_TYPE.UPDATE_TIMETABLE_ENTRY);
+    expect(result.type).toBe(ASSISTANT_ACTION_TYPE.UPDATE_REMINDER);
+  });
+
+  it("routes correction signals to the REMINDER domain", () => {
+    const target = resolveFollowUpTarget(
+      "no, I meant the reminder, change it to 6pm",
+      [
+        {
+          actionType: "create_reminder",
+          entityType: "REMINDER",
+          entityId: "rem_gym",
+          entityTitle: "Go hit the gym",
+          localTimeDescription: "due 2026-04-06T15:30:00.000Z",
+          turnIndex: 1,
+        },
+        {
+          actionType: "update_timetable_entry",
+          entityType: "TIMETABLE_ENTRY",
+          entityId: "entry_it",
+          entityTitle: "IT Project I (Regular)",
+          localTimeDescription: "14:00-17:00",
+          turnIndex: 2,
+        },
+      ],
+      [{ id: "rem_gym", title: "Go hit the gym" }],
+      [{ id: "entry_it", subject: "IT Project I (Regular)" }],
+    );
+
+    expect(target).not.toBeNull();
+    expect(target!.entityType).toBe("REMINDER");
+    expect(target!.entityId).toBe("rem_gym");
+    expect(target!.suggestedAction).toBe("UPDATE_REMINDER");
+  });
+
+  it("routes 'change the reminder to 7pm' to REMINDER domain even when timetable was recently mutated", () => {
+    const target = resolveFollowUpTarget(
+      "change the reminder to 7pm",
+      [
+        {
+          actionType: "update_timetable_entry",
+          entityType: "TIMETABLE_ENTRY",
+          entityId: "entry_it",
+          entityTitle: "IT Project I (Regular)",
+          localTimeDescription: "14:00-17:00",
+          turnIndex: 1,
+        },
+        {
+          actionType: "create_reminder",
+          entityType: "REMINDER",
+          entityId: "rem_gym",
+          entityTitle: "Go hit the gym",
+          localTimeDescription: "due 2026-04-06T15:30:00.000Z",
+          turnIndex: 2,
+        },
+      ],
+      [{ id: "rem_gym", title: "Go hit the gym" }],
+      [{ id: "entry_it", subject: "IT Project I (Regular)" }],
+    );
+
+    expect(target).not.toBeNull();
+    expect(target!.entityType).toBe("REMINDER");
+    expect(target!.suggestedAction).toBe("UPDATE_REMINDER");
+  });
+
+  it("routes 'move my class to 9am' to TIMETABLE_ENTRY domain", () => {
+    const target = resolveFollowUpTarget(
+      "move my class to 9am",
+      [
+        {
+          actionType: "create_reminder",
+          entityType: "REMINDER",
+          entityId: "rem_gym",
+          entityTitle: "Go hit the gym",
+          localTimeDescription: "",
+          turnIndex: 1,
+        },
+      ],
+      [{ id: "rem_gym", title: "Go hit the gym" }],
+      [{ id: "entry_it", subject: "IT Project I (Regular)" }],
+    );
+
+    expect(target).not.toBeNull();
+    expect(target!.entityType).toBe("TIMETABLE_ENTRY");
+    expect(target!.suggestedAction).toBe("UPDATE_TIMETABLE_ENTRY");
+  });
+
+  it("resolves pronoun 'it' to the most recently mutated entity", () => {
+    const target = resolveFollowUpTarget(
+      "change it to 8pm",
+      [
+        {
+          actionType: "create_reminder",
+          entityType: "REMINDER",
+          entityId: "rem_gym",
+          entityTitle: "Go hit the gym",
+          localTimeDescription: "due 2026-04-06T15:30:00.000Z",
+          turnIndex: 1,
+        },
+      ],
+      [{ id: "rem_gym", title: "Go hit the gym" }],
+      [],
+    );
+
+    expect(target).not.toBeNull();
+    expect(target!.entityType).toBe("REMINDER");
+    expect(target!.entityId).toBe("rem_gym");
+  });
+
+  it("extracts recent actions from conversation structured data", () => {
+    const actions = extractRecentActions(
+      [
+        {
+          role: "USER" as import("@prisma/client").ConversationMessageRole,
+          content: "Remind me to go to the gym at 5:30pm",
+          structuredData: null,
+        },
+        {
+          role: "ASSISTANT" as import("@prisma/client").ConversationMessageRole,
+          content: "Created reminder: Go hit the gym",
+          structuredData: {
+            type: "create_reminder",
+            confidence: "high",
+            reminder: {
+              title: "Go hit the gym",
+              type: "ONE_TIME",
+              priority: "MEDIUM",
+              tags: [],
+              dueAt: "2026-04-06T15:30:00.000Z",
+            },
+          },
+        },
+      ],
+      "Africa/Nairobi",
+    );
+
+    expect(actions.length).toBe(1);
+    expect(actions[0]!.entityType).toBe("REMINDER");
+    expect(actions[0]!.entityTitle).toBe("Go hit the gym");
+    expect(actions[0]!.actionType).toBe("create_reminder");
+  });
+
+  it("extracts both reminder and timetable update actions from conversation history", () => {
+    const actions = extractRecentActions(
+      [
+        {
+          role: "ASSISTANT" as import("@prisma/client").ConversationMessageRole,
+          content: "Updated IT Project I: endTime changed.",
+          structuredData: {
+            type: "update_timetable_entry",
+            confidence: "high",
+            entryId: "entry_it",
+            updates: { endTime: "18:00" },
+          },
+        },
+        {
+          role: "ASSISTANT" as import("@prisma/client").ConversationMessageRole,
+          content: "Created reminder: Go hit the gym",
+          structuredData: {
+            type: "create_reminder",
+            confidence: "high",
+            reminder: {
+              title: "Go hit the gym",
+              type: "ONE_TIME",
+              priority: "MEDIUM",
+              tags: [],
+              dueAt: "2026-04-06T15:30:00.000Z",
+            },
+          },
+        },
+      ],
+      "Africa/Nairobi",
+    );
+
+    expect(actions.length).toBe(2);
+    expect(actions[0]!.entityType).toBe("TIMETABLE_ENTRY");
+    expect(actions[0]!.actionType).toBe("update_timetable_entry");
+    expect(actions[1]!.entityType).toBe("REMINDER");
+    expect(actions[1]!.actionType).toBe("create_reminder");
+  });
+
+  it("accepts update_reminder schema action", () => {
+    const result = assistantParseResultSchema.parse({
+      type: ASSISTANT_ACTION_TYPE.UPDATE_REMINDER,
+      confidence: "high",
+      reminderId: "rem_abc123",
+      updates: {
+        dueAt: "2026-04-08T15:00:00.000Z",
+      },
+    });
+
+    expect(result.type).toBe(ASSISTANT_ACTION_TYPE.UPDATE_REMINDER);
+
+    if (result.type !== ASSISTANT_ACTION_TYPE.UPDATE_REMINDER) {
+      throw new Error("Expected update_reminder action.");
+    }
+
+    expect(result.reminderId).toBe("rem_abc123");
+  });
+
+  it("accepts update_note schema action", () => {
+    const result = assistantParseResultSchema.parse({
+      type: ASSISTANT_ACTION_TYPE.UPDATE_NOTE,
+      confidence: "high",
+      noteId: "note_abc123",
+      updates: {
+        content: "Updated content",
+      },
+    });
+
+    expect(result.type).toBe(ASSISTANT_ACTION_TYPE.UPDATE_NOTE);
+
+    if (result.type !== ASSISTANT_ACTION_TYPE.UPDATE_NOTE) {
+      throw new Error("Expected update_note action.");
+    }
+
+    expect(result.noteId).toBe("note_abc123");
   });
 });

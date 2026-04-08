@@ -40,6 +40,19 @@ const timetableDraftSchema = z.object({
   reminderLeadMinutes: z.number().int().min(0).max(1440).optional(),
 });
 
+const reminderUpdateSchema = z.object({
+  title: z.string().trim().min(1).max(160).optional(),
+  description: z.string().trim().max(2000).optional(),
+  priority: z.nativeEnum(ReminderPriority).optional(),
+  dueAt: z.coerce.date().optional(),
+});
+
+const noteUpdateSchema = z.object({
+  title: z.string().trim().min(1).max(160).optional(),
+  content: z.string().trim().min(1).max(4000).optional(),
+  tags: z.array(z.string().trim().min(1).max(40)).max(12).optional(),
+});
+
 const timetableUpdateSchema = z.object({
   subject: z.string().trim().min(1).max(160).optional(),
   startTime: timeSchema.optional(),
@@ -81,10 +94,22 @@ export const assistantParseResultSchema = z.discriminatedUnion("type", [
     reminder: reminderDraftSchema,
   }),
   z.object({
+    type: z.literal(ASSISTANT_ACTION_TYPE.UPDATE_REMINDER),
+    confidence: z.enum(["high", "medium", "low"]),
+    reminderId: z.string().trim().min(1).max(191),
+    updates: reminderUpdateSchema,
+  }),
+  z.object({
     type: z.literal(ASSISTANT_ACTION_TYPE.CREATE_NOTE),
     confidence: z.enum(["high", "medium", "low"]),
     note: noteDraftSchema,
     alsoCreateMemory: z.boolean().default(true),
+  }),
+  z.object({
+    type: z.literal(ASSISTANT_ACTION_TYPE.UPDATE_NOTE),
+    confidence: z.enum(["high", "medium", "low"]),
+    noteId: z.string().trim().min(1).max(191),
+    updates: noteUpdateSchema,
   }),
   z.object({
     type: z.literal(ASSISTANT_ACTION_TYPE.CREATE_TIMETABLE_ENTRY),
