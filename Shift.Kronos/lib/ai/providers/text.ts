@@ -19,6 +19,7 @@ import {
   ReminderPriority,
   ReminderType,
 } from "@prisma/client";
+import { formatDateForModel, formatDateTimeForModel, formatTimeForModel } from "@/lib/datetime";
 
 export type StructuredAssistantRequest = {
   userId?: string;
@@ -81,27 +82,36 @@ function serializeContext(context: AssistantContext) {
 
   return {
     timezone: context.timezone,
-    now: context.now.toISOString(),
-    nowLocal: formatDateTimeLabel(context.now, timezone),
+    nowUtc: context.now.toISOString(),
+    nowLocal: formatDateTimeForModel(context.now, timezone),
+    currentLocalTime: formatTimeForModel(context.now, timezone),
     activeReminders: context.activeReminders.map((item) => ({
       ...item,
       dueAt: item.dueAt ? item.dueAt.toISOString() : null,
-      dueAtLocal: item.dueAt ? formatDateTimeLabel(item.dueAt, timezone) : null,
+      dueAtLocal: item.dueAt ? formatDateTimeForModel(item.dueAt, timezone) : null,
     })),
     upcomingClasses: context.upcomingClasses.map((item) => ({
       ...item,
       startsAt: item.startsAt.toISOString(),
-      startsAtLocal: formatDateTimeLabel(item.startsAt, timezone),
-      startTimeLocal: formatTimeLabel(item.startsAt, timezone),
+      startsAtLocal: formatDateTimeForModel(item.startsAt, timezone),
+      startTimeLocal: formatTimeForModel(item.startsAt, timezone),
     })),
     timetableEntries: context.timetableEntries?.map((item) => ({
       ...item,
       semesterStart: item.semesterStart?.toISOString(),
       semesterEnd: item.semesterEnd?.toISOString(),
+      semesterStartLocal: item.semesterStart ? formatDateForModel(item.semesterStart, timezone) : null,
+      semesterEndLocal: item.semesterEnd ? formatDateForModel(item.semesterEnd, timezone) : null,
     })),
     semesterContext: context.semesterContext ? {
       semesterStart: context.semesterContext.semesterStart?.toISOString(),
       semesterEnd: context.semesterContext.semesterEnd?.toISOString(),
+      semesterStartLocal: context.semesterContext.semesterStart
+        ? formatDateForModel(context.semesterContext.semesterStart, timezone)
+        : null,
+      semesterEndLocal: context.semesterContext.semesterEnd
+        ? formatDateForModel(context.semesterContext.semesterEnd, timezone)
+        : null,
     } : null,
     knowledgeHighlights: context.knowledgeHighlights,
     memoryHighlights: context.memoryHighlights,
@@ -123,6 +133,7 @@ function buildAssistantSystemPrompt(): string {
 
 1. OUTPUT FORMAT: Return ONLY valid JSON matching the schema. No markdown, no code fences, no commentary.
 2. DETERMINISTIC BOUNDARY: You must stay deterministic at the mutation boundary. Never invent details not provided by the user.
+3. For user-facing time/date answers, prefer the local-time context fields such as nowLocal, currentLocalTime, startsAtLocal, startTimeLocal, and dueAtLocal. Do not answer with raw UTC ISO timestamps unless the user explicitly asks for UTC.
 
 ## DECISION RULES
 
@@ -903,4 +914,3 @@ function normalizeConfidence(value: unknown): "high" | "medium" | "low" {
   if (value === "medium") return "medium";
   return "high";
 }
-import { formatDateTimeLabel, formatTimeLabel } from "@/lib/datetime";

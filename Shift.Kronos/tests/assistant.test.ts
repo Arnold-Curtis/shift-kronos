@@ -5,6 +5,7 @@ import { ASSISTANT_ACTION_TYPE } from "@/lib/assistant/types";
 import { buildFollowUpInput, buildStructuredFollowUpInput } from "@/lib/assistant/service";
 import { generateStructuredAssistantAction } from "@/lib/ai/providers/text";
 import { assistantParseResultSchema } from "@/lib/assistant/schemas";
+import { formatDateTimeForModel, formatDateTimeLabel, formatTimeForModel, formatTimeLabel } from "@/lib/datetime";
 
 const context = {
   timezone: "Africa/Nairobi",
@@ -58,6 +59,16 @@ const context = {
 };
 
 describe("assistant heuristic parsing", () => {
+  it("formats Nairobi-local time labels correctly", () => {
+    const sample = new Date("2026-04-08T09:41:20.029Z");
+
+    expect(formatTimeLabel(sample, "Africa/Nairobi")).toBe("12:41");
+    expect(formatTimeForModel(sample, "Africa/Nairobi")).toBe("12:41");
+    expect(formatDateTimeLabel(sample, "Africa/Nairobi")).toBe("Wed, Apr 8 at 12:41");
+    expect(formatDateTimeForModel(sample, "Africa/Nairobi")).toContain("12:41");
+    expect(formatDateTimeForModel(sample, "Africa/Nairobi")).toContain("Africa/Nairobi");
+  });
+
   it("creates a one-time reminder when enough scheduling detail is present", () => {
     const result = parseAssistantIntentHeuristically(
       "Remind me to submit the assignment tomorrow at 8pm",

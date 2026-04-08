@@ -164,20 +164,63 @@ export function formatDateTimeLabel(date: Date, timeZone?: string) {
     return format(date, "EEE, MMM d 'at' HH:mm");
   }
 
-  const [weekday, datePart, timePart] = new Intl.DateTimeFormat("en-GB", {
-    timeZone,
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  })
-    .format(date)
-    .replace(",", "")
-    .split(" ");
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone,
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).formatToParts(date).map((part) => [part.type, part.value]),
+  );
 
-  return `${weekday}, ${datePart} at ${timePart}`;
+  return `${parts.weekday}, ${parts.month} ${parts.day} at ${parts.hour}:${parts.minute}`;
+}
+
+export function formatDateTimeForModel(date: Date, timeZone: string) {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone,
+      weekday: "short",
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).formatToParts(date).map((part) => [part.type, part.value]),
+  );
+
+  return `${parts.weekday}, ${parts.day} ${parts.month} ${parts.year} ${parts.hour}:${parts.minute} (${timeZone})`;
+}
+
+export function formatDateForModel(date: Date, timeZone: string) {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone,
+      weekday: "short",
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    }).formatToParts(date).map((part) => [part.type, part.value]),
+  );
+
+  return `${parts.weekday}, ${parts.day} ${parts.month} ${parts.year}`;
+}
+
+export function formatTimeForModel(date: Date, timeZone: string) {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone,
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).formatToParts(date).map((part) => [part.type, part.value]),
+  );
+
+  return `${parts.hour}:${parts.minute}`;
 }
 
 export function formatDateLabel(date: Date, timeZone?: string) {
