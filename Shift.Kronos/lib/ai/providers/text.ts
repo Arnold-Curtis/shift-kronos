@@ -77,16 +77,22 @@ function buildFallbackMemorySummary(request: StructuredMemorySummaryRequest) {
 }
 
 function serializeContext(context: AssistantContext) {
+  const timezone = context.timezone || "Africa/Nairobi";
+
   return {
     timezone: context.timezone,
     now: context.now.toISOString(),
+    nowLocal: formatDateTimeLabel(context.now, timezone),
     activeReminders: context.activeReminders.map((item) => ({
       ...item,
       dueAt: item.dueAt ? item.dueAt.toISOString() : null,
+      dueAtLocal: item.dueAt ? formatDateTimeLabel(item.dueAt, timezone) : null,
     })),
     upcomingClasses: context.upcomingClasses.map((item) => ({
       ...item,
       startsAt: item.startsAt.toISOString(),
+      startsAtLocal: formatDateTimeLabel(item.startsAt, timezone),
+      startTimeLocal: formatTimeLabel(item.startsAt, timezone),
     })),
     timetableEntries: context.timetableEntries?.map((item) => ({
       ...item,
@@ -897,3 +903,4 @@ function normalizeConfidence(value: unknown): "high" | "medium" | "low" {
   if (value === "medium") return "medium";
   return "high";
 }
+import { formatDateTimeLabel, formatTimeLabel } from "@/lib/datetime";

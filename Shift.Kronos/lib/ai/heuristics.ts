@@ -10,7 +10,14 @@ import {
   nextWednesday,
 } from "date-fns";
 import { AssistantAction, ASSISTANT_ACTION_TYPE, AssistantContext } from "@/lib/assistant/types";
-import { addDaysInTimeZone, getWeekdayFromDate, getZonedParts, makeDateInTimeZone } from "@/lib/datetime";
+import {
+  addDaysInTimeZone,
+  formatDateTimeLabel,
+  formatTimeLabel,
+  getWeekdayFromDate,
+  getZonedParts,
+  makeDateInTimeZone,
+} from "@/lib/datetime";
 
 function normalizeInput(input: string) {
   return input.trim().replace(/\s+/g, " ");
@@ -320,6 +327,7 @@ function parseTimetableAction(input: string, context: AssistantContext): Assista
 
 function answerScheduleQuestion(input: string, context: AssistantContext): AssistantAction {
   const lower = input.toLowerCase();
+  const timezone = context.timezone || "Africa/Nairobi";
 
   if (lower.includes("next class") || lower.includes("what class") || lower.includes("classes")) {
     const nextClass = context.upcomingClasses[0];
@@ -337,10 +345,10 @@ function answerScheduleQuestion(input: string, context: AssistantContext): Assis
     return {
       type: ASSISTANT_ACTION_TYPE.ANSWER_QUESTION,
       answer: {
-        summary: `Your next class is ${nextClass.subject}.`,
+        summary: `Your next class is ${nextClass.subject} at ${formatTimeLabel(nextClass.startsAt, timezone)}.`,
         evidence: [
           nextClass.location ? `Location: ${nextClass.location}` : "Location not set",
-          `Starts at ${nextClass.startsAt.toISOString()}`,
+          `Starts ${formatDateTimeLabel(nextClass.startsAt, timezone)}`,
         ],
       },
     };
@@ -365,7 +373,7 @@ function answerScheduleQuestion(input: string, context: AssistantContext): Assis
         summary: `You currently have ${dueReminders.length} active scheduled reminder${dueReminders.length === 1 ? "" : "s"}.`,
         evidence: dueReminders.map((reminder) =>
           reminder.dueAt
-            ? `${reminder.title} at ${reminder.dueAt.toISOString()}`
+            ? `${reminder.title} at ${formatDateTimeLabel(reminder.dueAt, timezone)}`
             : `${reminder.title} without a scheduled due time`,
         ),
       },

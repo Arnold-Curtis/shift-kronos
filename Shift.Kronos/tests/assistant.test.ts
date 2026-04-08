@@ -404,7 +404,9 @@ describe("assistant heuristic parsing", () => {
     }
 
     expect(result.answer.summary).toContain("Operating Systems");
+    expect(result.answer.summary).toContain("15:00");
     expect(result.answer.evidence[0]).toContain("Hall A");
+    expect(result.answer.evidence[1]).not.toContain("T");
   });
 
   it("creates recurring reminders for repeated language", () => {
