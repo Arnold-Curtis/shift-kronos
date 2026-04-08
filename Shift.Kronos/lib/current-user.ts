@@ -53,6 +53,17 @@ export async function requireCurrentUser(): Promise<User> {
   });
 
   if (existingUser) {
+    if (existingUser.timezone === "Africa/Lagos") {
+      return db.user.update({
+        where: {
+          id: existingUser.id,
+        },
+        data: {
+          timezone: DEFAULT_TIMEZONE,
+        },
+      });
+    }
+
     return existingUser;
   }
 
@@ -82,11 +93,24 @@ export async function getCurrentUser() {
     return null;
   }
 
-  return db.user.findUnique({
+  const user = await db.user.findUnique({
     where: {
       clerkUserId: session.userId,
     },
   });
+
+  if (user?.timezone === "Africa/Lagos") {
+    return db.user.update({
+      where: {
+        id: user.id,
+      },
+      data: {
+        timezone: DEFAULT_TIMEZONE,
+      },
+    });
+  }
+
+  return user;
 }
 
 export { DEFAULT_TIMEZONE };

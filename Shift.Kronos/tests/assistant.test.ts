@@ -409,6 +409,20 @@ describe("assistant heuristic parsing", () => {
     expect(result.answer.evidence[1]).not.toContain("T");
   });
 
+  it("answers current time questions in the user timezone", () => {
+    const result = parseAssistantIntentHeuristically("What time is it right now?", context);
+
+    expect(result.type).toBe(ASSISTANT_ACTION_TYPE.ANSWER_QUESTION);
+
+    if (result.type !== ASSISTANT_ACTION_TYPE.ANSWER_QUESTION) {
+      throw new Error("Expected answer action.");
+    }
+
+    expect(result.answer.summary).toContain("13:00");
+    expect(result.answer.summary).toContain("Africa/Nairobi");
+    expect(result.answer.evidence[0]).not.toContain("T");
+  });
+
   it("creates recurring reminders for repeated language", () => {
     const result = parseAssistantIntentHeuristically("Remind me every day to take vitamins", context);
 

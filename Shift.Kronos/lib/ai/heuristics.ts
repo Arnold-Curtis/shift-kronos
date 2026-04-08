@@ -329,6 +329,22 @@ function answerScheduleQuestion(input: string, context: AssistantContext): Assis
   const lower = input.toLowerCase();
   const timezone = context.timezone || "Africa/Nairobi";
 
+  if (
+    lower.includes("what time is it") ||
+    lower.includes("what is the time") ||
+    lower.includes("time right now") ||
+    lower === "time" ||
+    lower === "current time"
+  ) {
+    return {
+      type: ASSISTANT_ACTION_TYPE.ANSWER_QUESTION,
+      answer: {
+        summary: `The current time is ${formatTimeLabel(context.now, timezone)} in ${timezone}.`,
+        evidence: [`Local time: ${formatDateTimeLabel(context.now, timezone)}`],
+      },
+    };
+  }
+
   if (lower.includes("next class") || lower.includes("what class") || lower.includes("classes")) {
     const nextClass = context.upcomingClasses[0];
 
@@ -440,7 +456,12 @@ export function parseAssistantIntentHeuristically(input: string, context: Assist
     lower.includes("what is due") ||
     lower.includes("next class") ||
     lower.includes("classes") ||
-    lower.includes("schedule")
+    lower.includes("schedule") ||
+    lower.includes("what time is it") ||
+    lower.includes("what is the time") ||
+    lower.includes("time right now") ||
+    lower === "time" ||
+    lower === "current time"
   ) {
     return answerScheduleQuestion(normalized, context);
   }
