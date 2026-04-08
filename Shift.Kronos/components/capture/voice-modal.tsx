@@ -150,7 +150,19 @@ export function VoiceModal({
 
     try {
       const formData = new FormData();
-      formData.append("audio", blob);
+      const normalizedType = blob.type || "audio/webm";
+      const extension = normalizedType.includes("ogg")
+        ? "ogg"
+        : normalizedType.includes("mp4")
+          ? "mp4"
+          : normalizedType.includes("wav")
+            ? "wav"
+            : "webm";
+      const file = new File([blob], `voice-note.${extension}`, {
+        type: normalizedType,
+      });
+
+      formData.append("audio", file);
       if (conversationId) {
         formData.append("conversationId", conversationId);
       }
