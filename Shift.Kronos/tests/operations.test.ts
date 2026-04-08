@@ -27,6 +27,16 @@ describe("operational request authorization", () => {
     expect(isAuthorizedCronRequest(request)).toBe(true);
   });
 
+  it("authorizes Vercel cron requests by user agent", () => {
+    const request = new Request("https://shift-kronos.test/api/cron/notifications", {
+      headers: {
+        "user-agent": "vercel-cron/1.0",
+      },
+    });
+
+    expect(isAuthorizedCronRequest(request)).toBe(true);
+  });
+
   it("rejects invalid cron secrets", () => {
     const request = new Request("https://shift-kronos.test/api/cron/notifications", {
       headers: {

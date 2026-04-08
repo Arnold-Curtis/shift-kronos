@@ -5,7 +5,16 @@ function toBuffer(value: string) {
   return Buffer.from(value, "utf8");
 }
 
+function isVercelCronRequest(request: Request) {
+  const userAgent = request.headers.get("user-agent")?.trim().toLowerCase();
+  return userAgent === "vercel-cron/1.0";
+}
+
 export function isAuthorizedCronRequest(request: Request) {
+  if (isVercelCronRequest(request)) {
+    return true;
+  }
+
   const headerValue = request.headers.get("x-cron-secret") ?? request.headers.get("authorization");
   const expectedSecret = getCronSecret();
 
