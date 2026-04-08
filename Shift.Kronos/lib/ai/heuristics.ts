@@ -1,6 +1,5 @@
 import { ReminderPriority, ReminderType, RecurrenceFrequency } from "@prisma/client";
 import {
-  addDays,
   addHours,
   nextFriday,
   nextMonday,
@@ -11,7 +10,7 @@ import {
   nextWednesday,
 } from "date-fns";
 import { AssistantAction, ASSISTANT_ACTION_TYPE, AssistantContext } from "@/lib/assistant/types";
-import { getWeekdayFromDate } from "@/lib/datetime";
+import { addDaysInTimeZone, getWeekdayFromDate, getZonedParts, makeDateInTimeZone } from "@/lib/datetime";
 
 function normalizeInput(input: string) {
   return input.trim().replace(/\s+/g, " ");
@@ -35,62 +34,64 @@ function parseExplicitTime(lower: string) {
   };
 }
 
-function parseDefaultExplicitDueAt(input: string, now: Date) {
+function parseDefaultExplicitDueAt(input: string, now: Date, timezone: string) {
   const explicitTime = parseExplicitTime(input.toLowerCase());
 
   if (!explicitTime) {
     return null;
   }
 
-  const todayAtTime = new Date(Date.UTC(
-    now.getUTCFullYear(),
-    now.getUTCMonth(),
-    now.getUTCDate(),
-    explicitTime.hour,
-    explicitTime.minute,
-    0,
-    0,
-  ));
+  const zonedNow = getZonedParts(now, timezone);
+  const todayAtTime = makeDateInTimeZone({
+    year: zonedNow.year,
+    month: zonedNow.month,
+    day: zonedNow.day,
+    hour: explicitTime.hour,
+    minute: explicitTime.minute,
+    second: 0,
+    millisecond: 0,
+  }, timezone);
 
   return todayAtTime.getTime() >= now.getTime()
     ? todayAtTime
-    : toDateAtHour(now, 1, explicitTime.hour, explicitTime.minute);
+    : toDateAtHour(now, 1, explicitTime.hour, explicitTime.minute, timezone);
 }
 
-function toDateAtHour(base: Date, dayOffset: number, hour: number, minute: number) {
-  const next = addDays(base, dayOffset);
-  return new Date(Date.UTC(
-    next.getUTCFullYear(),
-    next.getUTCMonth(),
-    next.getUTCDate(),
+function toDateAtHour(base: Date, dayOffset: number, hour: number, minute: number, timezone: string) {
+  const next = addDaysInTimeZone(base, dayOffset, timezone);
+  const zonedNext = getZonedParts(next, timezone);
+  return makeDateInTimeZone({
+    year: zonedNext.year,
+    month: zonedNext.month,
+    day: zonedNext.day,
     hour,
     minute,
-    0,
-    0,
-  ));
+    second: 0,
+    millisecond: 0,
+  }, timezone);
 }
 
-function parseRelativeDueAt(input: string, now: Date) {
+function parseRelativeDueAt(input: string, now: Date, timezone: string) {
   const lower = input.toLowerCase();
   const explicitTime = parseExplicitTime(lower);
 
   if (lower.includes("tomorrow")) {
-    return toDateAtHour(now, 1, explicitTime?.hour ?? 9, explicitTime?.minute ?? 0);
+    return toDateAtHour(now, 1, explicitTime?.hour ?? 9, explicitTime?.minute ?? 0, timezone);
   }
 
   if (lower.includes("tonight")) {
-    return toDateAtHour(now, 0, explicitTime?.hour ?? 20, explicitTime?.minute ?? 0);
+    return toDateAtHour(now, 0, explicitTime?.hour ?? 20, explicitTime?.minute ?? 0, timezone);
   }
 
   if (lower.includes("this evening")) {
-    return toDateAtHour(now, 0, explicitTime?.hour ?? 18, explicitTime?.minute ?? 0);
+    return toDateAtHour(now, 0, explicitTime?.hour ?? 18, explicitTime?.minute ?? 0, timezone);
   }
 
   if (lower.includes("in 1 hour")) {
     return addHours(now, 1);
   }
 
-  return parseDefaultExplicitDueAt(input, now);
+  return parseDefaultExplicitDueAt(input, now, timezone);
 }
 
 function parseWeekdayReminder(input: string, now: Date) {
@@ -127,16 +128,16 @@ function parseWeekdayReminder(input: string, now: Date) {
   return null;
 }
 
-function parseWeekdayReference(input: string, now: Date) {
+function parseWeekdayReference(input: string, now: Date, timezone: string) {
   const date = parseWeekdayReminder(input, now);
-  return date ? getWeekdayFromDate(date) : null;
+  return date ? getWeekdayFromDate(date, timezone) : null;
 }
 
-function parseRelativeDateReference(input: string, now: Date) {
+function parseRelativeDateReference(input: string, now: Date, timezone: string) {
   const lower = input.toLowerCase();
 
   if (lower.includes("tomorrow")) {
-    return addDays(now, 1);
+    return addDaysInTimeZone(now, 1, timezone);
   }
 
   if (lower.includes("today") || lower.includes("tonight") || lower.includes("this evening")) {
@@ -146,15 +147,16 @@ function parseRelativeDateReference(input: string, now: Date) {
   return parseWeekdayReminder(lower, now);
 }
 
-function parseSemesterRange(input: string, now: Date) {
-  const reference = parseRelativeDateReference(input, now);
+function parseSemesterRange(input: string, now: Date, timezone: string) {
+  const reference = parseRelativeDateReference(input, now, timezone);
 
   if (!reference) {
     return null;
   }
 
-  const semesterStart = new Date(Date.UTC(reference.getUTCFullYear(), reference.getUTCMonth(), 1, 0, 0, 0, 0));
-  const semesterEnd = new Date(Date.UTC(reference.getUTCFullYear(), reference.getUTCMonth() + 4, 0, 0, 0, 0, 0));
+  const zonedReference = getZonedParts(reference, timezone);
+  const semesterStart = makeDateInTimeZone({ year: zonedReference.year, month: zonedReference.month, day: 1, hour: 0, minute: 0, second: 0, millisecond: 0 }, timezone);
+  const semesterEnd = makeDateInTimeZone({ year: zonedReference.year, month: zonedReference.month + 4, day: 0, hour: 0, minute: 0, second: 0, millisecond: 0 }, timezone);
 
   return {
     semesterStart,
@@ -226,11 +228,12 @@ function looksLikeTimetableRequest(lower: string) {
 
 function parseTimetableAction(input: string, context: AssistantContext): AssistantAction {
   const lower = input.toLowerCase();
+  const timezone = context.timezone || "Africa/Nairobi";
   const explicitTime = parseExplicitTime(lower);
-  const weekday = parseWeekdayReference(lower, context.now);
-  const relativeDate = parseRelativeDateReference(lower, context.now);
+  const weekday = parseWeekdayReference(lower, context.now, timezone);
+  const relativeDate = parseRelativeDateReference(lower, context.now, timezone);
   const subject = extractTimetableSubject(input);
-  const semesterRange = parseSemesterRange(lower, context.now);
+  const semesterRange = parseSemesterRange(lower, context.now, timezone);
 
   if (!subject) {
     return {
@@ -305,7 +308,7 @@ function parseTimetableAction(input: string, context: AssistantContext): Assista
     confidence: "high",
     timetableEntry: {
       subject,
-      dayOfWeek: weekday ?? getWeekdayFromDate(relativeDate ?? context.now),
+      dayOfWeek: weekday ?? getWeekdayFromDate(relativeDate ?? context.now, timezone),
       startTime,
       endTime,
       semesterStart: semesterRange.semesterStart,
@@ -469,8 +472,9 @@ export function parseAssistantIntentHeuristically(input: string, context: Assist
     };
   }
 
+  const timezone = context.timezone || "Africa/Nairobi";
   const title = extractTitle(normalized);
-  const dueAt = parseRelativeDueAt(lower, context.now);
+  const dueAt = parseRelativeDueAt(lower, context.now, timezone);
   const weekdayDueAt = parseWeekdayReminder(lower, context.now);
   const resolvedDueAt = dueAt ?? weekdayDueAt ?? undefined;
   const isRecurring = lower.includes("every day") || lower.includes("daily") || lower.includes("every week");

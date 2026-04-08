@@ -2,7 +2,7 @@ import { auth, currentUser } from "@clerk/nextjs/server";
 import { User } from "@prisma/client";
 import { db } from "@/lib/db";
 
-const DEFAULT_TIMEZONE = "Africa/Lagos";
+const DEFAULT_TIMEZONE = "Africa/Nairobi";
 const PREVIEW_DEMO_CLERK_ID = "preview-demo-user";
 
 function shouldBypassClerk() {
@@ -29,7 +29,9 @@ export async function requireCurrentUser(): Promise<User> {
       where: {
         clerkUserId: PREVIEW_DEMO_CLERK_ID,
       },
-      update: {},
+      update: {
+        timezone: DEFAULT_TIMEZONE,
+      },
       create: {
         clerkUserId: PREVIEW_DEMO_CLERK_ID,
         displayName: "Preview User",

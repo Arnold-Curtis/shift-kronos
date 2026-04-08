@@ -3,6 +3,15 @@ import { formatTimeLabel } from "@/lib/datetime";
 import { TimetableOccurrence } from "@/lib/timetable/types";
 
 const weekdayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const DISPLAY_TIMEZONE = "Africa/Nairobi";
+
+function getDisplayWeekday(date: Date) {
+  const label = new Intl.DateTimeFormat("en-GB", { timeZone: DISPLAY_TIMEZONE, weekday: "short" })
+    .format(date)
+    .replace(/[^A-Za-z]/g, "");
+
+  return weekdayLabels.indexOf(label) + 1;
+}
 
 type TimetableWeeklyGridProps = {
   occurrences: TimetableOccurrence[];
@@ -11,8 +20,7 @@ type TimetableWeeklyGridProps = {
 export function TimetableWeeklyGrid({ occurrences }: TimetableWeeklyGridProps) {
   const grouped = weekdayLabels.map((_, index) =>
     occurrences.filter((occurrence) => {
-      const day = occurrence.startsAt.getDay();
-      const normalized = day === 0 ? 7 : day;
+      const normalized = getDisplayWeekday(occurrence.startsAt);
       return normalized === index + 1;
     }),
   );
@@ -31,7 +39,7 @@ export function TimetableWeeklyGrid({ occurrences }: TimetableWeeklyGridProps) {
                   <article key={`${occurrence.entryId}-${occurrence.startsAt.toISOString()}`} className="rounded-2xl border border-border bg-panel px-3 py-3">
                     <p className="text-sm font-semibold text-foreground">{occurrence.subject}</p>
                     <p className="mt-1 text-xs text-foreground-muted">
-                      {formatTimeLabel(occurrence.startsAt)} - {formatTimeLabel(occurrence.endsAt)}
+                      {formatTimeLabel(occurrence.startsAt, DISPLAY_TIMEZONE)} - {formatTimeLabel(occurrence.endsAt, DISPLAY_TIMEZONE)}
                     </p>
                     {occurrence.location ? <p className="mt-2 text-xs text-foreground-muted">{occurrence.location}</p> : null}
                   </article>

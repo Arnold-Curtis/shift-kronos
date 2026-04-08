@@ -2,6 +2,8 @@ import { SectionCard } from "@/components/dashboard/section-card";
 import { formatDateTimeLabel } from "@/lib/datetime";
 import { TimetableOccurrence } from "@/lib/timetable/types";
 
+const DISPLAY_TIMEZONE = "Africa/Nairobi";
+
 type TimetableUpcomingListProps = {
   occurrences: TimetableOccurrence[];
 };
@@ -20,7 +22,7 @@ export function TimetableUpcomingList({ occurrences }: TimetableUpcomingListProp
               <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                 <div>
                   <h3 className="text-base font-semibold text-foreground">{occurrence.subject}</h3>
-                  <p className="mt-1 text-sm text-foreground-muted">{formatDateTimeLabel(occurrence.startsAt)}</p>
+                  <p className="mt-1 text-sm text-foreground-muted">{formatDateTimeLabel(occurrence.startsAt, DISPLAY_TIMEZONE)}</p>
                 </div>
                 <div className="text-sm text-foreground-muted">
                   {occurrence.location ?? "Location pending"}

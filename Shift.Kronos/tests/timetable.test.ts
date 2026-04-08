@@ -76,7 +76,7 @@ describe("timetable occurrences", () => {
     );
 
     expect(occurrences).toHaveLength(1);
-    expect(occurrences[0]?.startsAt.toISOString()).toBe("2026-04-06T09:00:00.000Z");
+    expect(occurrences[0]?.startsAt.toISOString()).toBe("2026-04-06T06:00:00.000Z");
   });
 });
 

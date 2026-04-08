@@ -178,7 +178,7 @@ export async function getAssistantContextForUser(
   });
 
   return {
-    timezone: currentUser?.timezone ?? "Africa/Lagos",
+    timezone: currentUser?.timezone ?? "Africa/Nairobi",
     now,
     activeReminders: reminders.scheduled.slice(0, 12).map((reminder) => ({
       id: reminder.id,

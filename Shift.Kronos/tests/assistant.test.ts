@@ -7,7 +7,7 @@ import { generateStructuredAssistantAction } from "@/lib/ai/providers/text";
 import { assistantParseResultSchema } from "@/lib/assistant/schemas";
 
 const context = {
-  timezone: "Africa/Lagos",
+  timezone: "Africa/Nairobi",
   now: new Date("2026-04-06T10:00:00.000Z"),
   activeReminders: [
     {
@@ -71,7 +71,7 @@ describe("assistant heuristic parsing", () => {
     }
 
     expect(result.reminder.type).toBe(ReminderType.ONE_TIME);
-    expect(result.reminder.dueAt?.toISOString()).toBe("2026-04-07T20:00:00.000Z");
+    expect(result.reminder.dueAt?.toISOString()).toBe("2026-04-07T17:00:00.000Z");
     expect(result.reminder.tags).toContain("school");
   });
 
@@ -88,7 +88,7 @@ describe("assistant heuristic parsing", () => {
     }
 
     expect(result.reminder.title).toBe("brush my shoes");
-    expect(result.reminder.dueAt?.toISOString()).toBe("2026-04-07T07:00:00.000Z");
+    expect(result.reminder.dueAt?.toISOString()).toBe("2026-04-07T04:00:00.000Z");
   });
 
   it("parses explicit reminder times without relative words and supports spaced minute input", () => {
@@ -104,7 +104,7 @@ describe("assistant heuristic parsing", () => {
     }
 
     expect(result.reminder.title).toBe("testing telegram");
-    expect(result.reminder.dueAt?.toISOString()).toBe("2026-04-06T22:51:00.000Z");
+    expect(result.reminder.dueAt?.toISOString()).toBe("2026-04-06T19:51:00.000Z");
   });
 
   it("asks for timetable-specific missing fields instead of reminder intent", () => {
