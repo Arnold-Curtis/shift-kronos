@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useEffect } from "react";
-import { sendTelegramTestMessageAction } from "@/app/settings/actions";
+import { sendTelegramTestMessageAction, dispatchNotificationsAction } from "@/app/settings/actions";
 import { INITIAL_ME_ACTION_STATE } from "@/app/me/action-state";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { useToast } from "@/components/ui/toast";
@@ -34,17 +34,28 @@ export function TelegramDiagnosticsCard({
   recentFailures,
 }: TelegramDiagnosticsCardProps) {
   const { addToast } = useToast();
-  const [state, action] = useActionState(sendTelegramTestMessageAction, INITIAL_ME_ACTION_STATE);
+  const [testState, testAction] = useActionState(sendTelegramTestMessageAction, INITIAL_ME_ACTION_STATE);
+  const [dispatchState, dispatchAction] = useActionState(dispatchNotificationsAction, INITIAL_ME_ACTION_STATE);
 
   useEffect(() => {
-    if (state.status === "success" && state.message) {
-      addToast("success", state.message);
+    if (testState.status === "success" && testState.message) {
+      addToast("success", testState.message);
     }
 
-    if (state.status === "error" && state.message) {
-      addToast("error", state.message);
+    if (testState.status === "error" && testState.message) {
+      addToast("error", testState.message);
     }
-  }, [addToast, state]);
+  }, [addToast, testState]);
+
+  useEffect(() => {
+    if (dispatchState.status === "success" && dispatchState.message) {
+      addToast("success", dispatchState.message);
+    }
+
+    if (dispatchState.status === "error" && dispatchState.message) {
+      addToast("error", dispatchState.message);
+    }
+  }, [addToast, dispatchState]);
 
   return (
     <div className="space-y-4">
@@ -69,12 +80,20 @@ export function TelegramDiagnosticsCard({
         Telegram delivery uses the linked user chat id first, then falls back to <code>TELEGRAM_CHAT_ID</code>. Use the test button below after starting your bot conversation in Telegram.
       </div>
 
-      <form action={action} className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <form action={testAction} className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-sm font-semibold text-text-primary">Delivery probe</p>
           <p className="text-xs text-text-tertiary">Sends a live test message through the app&apos;s Telegram transport.</p>
         </div>
         <SubmitButton idleLabel="Send Telegram test" pendingLabel="Sending Telegram test" className="btn-primary w-full sm:w-auto" />
+      </form>
+
+      <form action={dispatchAction} className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm font-semibold text-text-primary">Dispatch pending notifications</p>
+          <p className="text-xs text-text-tertiary">Runs the full notification pipeline for all due reminders and timetable events.</p>
+        </div>
+        <SubmitButton idleLabel="Dispatch now" pendingLabel="Dispatching" className="btn-secondary w-full sm:w-auto" />
       </form>
 
       <div>

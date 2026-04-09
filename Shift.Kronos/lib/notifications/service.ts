@@ -32,6 +32,35 @@ import { resolveTelegramChatId } from "@/lib/notifications/diagnostics";
 import { getNextRecurringDueAt } from "@/lib/reminders/recurrence";
 import { updateReminderStatus } from "@/lib/reminders/service";
 import { getTimetableOccurrencesInRange } from "@/lib/timetable/service";
+import { logInfo, logWarn } from "@/lib/observability/logger";
+
+const DISPATCH_MAX_RETRIES = 2;
+const DISPATCH_RETRY_BASE_DELAY_MS = 500;
+
+const TIMETABLE_LOOKBACK_MINUTES = 60;
+
+function isTransientTelegramError(errorMessage: string | null): boolean {
+  if (!errorMessage) return false;
+  const transientSignals = [
+    "Too Many Requests",
+    "429",
+    "flood",
+    "timeout",
+    "ETIMEDOUT",
+    "ECONNRESET",
+    "ECONNREFUSED",
+    "network",
+    "SERVICE_UNAVAILABLE",
+    "503",
+    "502",
+  ];
+  const lower = errorMessage.toLowerCase();
+  return transientSignals.some((signal) => lower.includes(signal.toLowerCase()));
+}
+
+async function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 export function getDueReminderOccurrenceDate(reminder: DueReminderRecord, now: Date) {
   if (reminder.snoozedUntil && reminder.snoozedUntil > now) {
@@ -222,6 +251,8 @@ export async function getDueTimetableNotifications(now: Date = new Date()) {
     },
   });
 
+  const lookbackStart = subMinutes(now, TIMETABLE_LOOKBACK_MINUTES);
+
   const results = await Promise.all(
     users.map(async (user) => {
       const chatId = resolveTelegramChatId(user.telegramChatId);
@@ -231,7 +262,7 @@ export async function getDueTimetableNotifications(now: Date = new Date()) {
       }
 
       const occurrences = await getTimetableOccurrencesInRange(user.id, {
-        start: now,
+        start: lookbackStart,
         end: addMinutes(now, 7 * 24 * 60),
       });
 
@@ -324,6 +355,22 @@ export async function dispatchPendingNotifications(now: Date = new Date()): Prom
   const { dueItems, skippedCount } = await getPendingDueItems(now);
   const results: DeliveryDispatchResult[] = [];
 
+  if (dueItems.length === 0) {
+    logInfo("notifications.dispatch.empty", { skippedCount });
+    return {
+      selectedCount: 0,
+      skippedCount,
+      deliveredCount: 0,
+      failedCount: 0,
+      results,
+    };
+  }
+
+  logInfo("notifications.dispatch.start", {
+    candidateCount: dueItems.length,
+    skippedCount,
+  });
+
   for (const dueItem of dueItems) {
     let reservation;
 
@@ -334,10 +381,16 @@ export async function dispatchPendingNotifications(now: Date = new Date()): Prom
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === "P2002"
       ) {
+        logWarn("notifications.dispatch.duplicate_reservation", {
+          dedupeKey: dueItem.dedupeKey,
+        });
         continue;
       }
 
       if (error instanceof Error && error.message.toLowerCase().includes("unique")) {
+        logWarn("notifications.dispatch.duplicate_reservation", {
+          dedupeKey: dueItem.dedupeKey,
+        });
         continue;
       }
 
@@ -345,7 +398,21 @@ export async function dispatchPendingNotifications(now: Date = new Date()): Prom
     }
 
     const message = formatDueItemMessage(dueItem);
-    const sendResult = await sendTelegramMessage(message);
+    let sendResult = await sendTelegramMessage(message);
+    let attempt = 1;
+
+    while (!sendResult.ok && attempt <= DISPATCH_MAX_RETRIES && isTransientTelegramError(sendResult.errorMessage)) {
+      const delay = DISPATCH_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
+      logWarn("notifications.dispatch.transient_retry", {
+        dedupeKey: dueItem.dedupeKey,
+        attempt,
+        nextDelayMs: delay,
+        errorMessage: sendResult.errorMessage,
+      });
+      await sleep(delay);
+      sendResult = await sendTelegramMessage(message);
+      attempt++;
+    }
 
     if (sendResult.ok) {
       await markNotificationDelivered(reservation.id, sendResult.messageId);
@@ -359,15 +426,28 @@ export async function dispatchPendingNotifications(now: Date = new Date()): Prom
       continue;
     }
 
-    await markNotificationFailed(reservation.id, sendResult.errorMessage ?? "Unknown Telegram error.");
+    const failureReason = sendResult.errorMessage ?? "Unknown Telegram error.";
+    await markNotificationFailed(reservation.id, failureReason);
+    logWarn("notifications.dispatch.delivery_failed", {
+      dedupeKey: dueItem.dedupeKey,
+      attempts: attempt,
+      failureReason,
+    });
     results.push({
       reservationId: reservation.id,
       dedupeKey: reservation.dedupeKey,
       status: NotificationEventStatus.FAILED,
       providerMessageId: null,
-      failureReason: sendResult.errorMessage ?? "Unknown Telegram error.",
+      failureReason,
     });
   }
+
+  logInfo("notifications.dispatch.complete", {
+    selectedCount: dueItems.length,
+    deliveredCount: results.filter((r) => r.status === NotificationEventStatus.DELIVERED).length,
+    failedCount: results.filter((r) => r.status === NotificationEventStatus.FAILED).length,
+    skippedCount,
+  });
 
   return {
     selectedCount: dueItems.length,

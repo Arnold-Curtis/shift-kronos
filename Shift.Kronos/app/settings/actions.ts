@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireCurrentUser } from "@/lib/current-user";
 import { INITIAL_ME_ACTION_STATE, MeActionState } from "@/app/me/action-state";
 import { normalizeAssistantModelForProvider } from "@/lib/ai/preferences";
-import { sendTelegramTestMessage } from "@/lib/notifications/diagnostics";
+import { sendTelegramTestMessage, dispatchNotificationDiagnostics } from "@/lib/notifications/diagnostics";
 import { updateUserAiSettings } from "@/lib/settings/service";
 import { userAiSettingsSchema } from "@/lib/settings/schemas";
 
@@ -57,6 +57,29 @@ export async function sendTelegramTestMessageAction(
     return {
       status: "error",
       message: error instanceof Error ? error.message : "Telegram test failed.",
+    };
+  }
+}
+
+export async function dispatchNotificationsAction(
+  _previousState: MeActionState = INITIAL_ME_ACTION_STATE,
+): Promise<MeActionState> {
+  void _previousState;
+
+  try {
+    const user = await requireCurrentUser();
+    const result = await dispatchNotificationDiagnostics(user.id);
+
+    revalidatePath("/me");
+
+    return {
+      status: result.ok ? "success" : "error",
+      message: result.message,
+    };
+  } catch (error) {
+    return {
+      status: "error",
+      message: error instanceof Error ? error.message : "Notification dispatch failed.",
     };
   }
 }
