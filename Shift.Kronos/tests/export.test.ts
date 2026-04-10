@@ -208,7 +208,7 @@ describe("export service", () => {
         timetableEntryId: null,
         sourceType: "REMINDER",
         sourceOccurrenceKey: "rem_1:2026-04-06T10:00:00.000Z",
-        transport: "telegram",
+        transport: "email",
         dedupeKey: "dedupe_1",
         status: "DELIVERED",
         providerMessageId: "777",

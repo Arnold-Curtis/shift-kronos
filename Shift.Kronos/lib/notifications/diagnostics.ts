@@ -1,15 +1,15 @@
 import { db } from "@/lib/db";
-import { buildTimetableDueItem } from "@/lib/notifications/service";
-import { formatDueItemMessage } from "@/lib/notifications/telegram-format";
-import { getOptionalTelegramChatId } from "@/lib/operations/env";
-import { sendTelegramMessage } from "@/lib/notifications/telegram";
-import { dispatchPendingNotifications } from "@/lib/notifications/service";
+import { formatDueItemEmail } from "@/lib/notifications/email-format";
+import { sendNotificationEmail } from "@/lib/notifications/email";
+import { buildTimetableDueItem, dispatchPendingNotifications } from "@/lib/notifications/service";
+import { resolveNotificationRecipientEmail } from "@/lib/notifications/recipients";
+import { getOptionalNotificationToEmail } from "@/lib/operations/env";
 import { NotificationDispatchReport } from "@/lib/notifications/types";
 
-export type TelegramDiagnostics = {
-  userTelegramChatId: string | null;
-  fallbackTelegramChatId: string | null;
-  resolvedTelegramChatId: string | null;
+export type EmailDiagnostics = {
+  userEmailAddress: string | null;
+  fallbackEmailAddress: string | null;
+  resolvedEmailAddress: string | null;
   recentFailures: Array<{
     id: string;
     sourceType: string;
@@ -18,24 +18,24 @@ export type TelegramDiagnostics = {
   }>;
 };
 
-export function resolveTelegramChatId(userTelegramChatId: string | null | undefined) {
-  return userTelegramChatId ?? getOptionalTelegramChatId();
+export async function resolveNotificationEmailAddress(clerkUserId: string | null | undefined) {
+  return resolveNotificationRecipientEmail(clerkUserId);
 }
 
-export async function getTelegramDiagnostics(userId: string): Promise<TelegramDiagnostics> {
+export async function getEmailDiagnostics(userId: string): Promise<EmailDiagnostics> {
   const user = await db.user.findUnique({
     where: {
       id: userId,
     },
     select: {
-      telegramChatId: true,
+      clerkUserId: true,
     },
   });
 
   const recentFailures = await db.notificationEvent.findMany({
     where: {
       userId,
-      transport: "telegram",
+      transport: "email",
       failureReason: {
         not: null,
       },
@@ -52,32 +52,35 @@ export async function getTelegramDiagnostics(userId: string): Promise<TelegramDi
     },
   });
 
-  const fallbackTelegramChatId = getOptionalTelegramChatId();
-  const userTelegramChatId = user?.telegramChatId ?? null;
+  const userEmailAddress = user?.clerkUserId ? await resolveNotificationRecipientEmail(user.clerkUserId) : null;
+  const fallbackEmailAddress = getOptionalNotificationToEmail();
 
   return {
-    userTelegramChatId,
-    fallbackTelegramChatId,
-    resolvedTelegramChatId: resolveTelegramChatId(userTelegramChatId),
+    userEmailAddress,
+    fallbackEmailAddress,
+    resolvedEmailAddress: userEmailAddress ?? fallbackEmailAddress,
     recentFailures,
   };
 }
 
-export async function sendTelegramTestMessage(userId: string) {
-  const diagnostics = await getTelegramDiagnostics(userId);
+export async function sendEmailTestMessage(userId: string) {
+  const user = await db.user.findUnique({
+    where: { id: userId },
+    select: { clerkUserId: true },
+  });
+  const resolvedEmailAddress = await resolveNotificationRecipientEmail(user?.clerkUserId);
 
-  if (!diagnostics.resolvedTelegramChatId) {
+  if (!resolvedEmailAddress) {
     return {
       ok: false,
-      message:
-        "No Telegram destination is configured. Link your chat or set TELEGRAM_CHAT_ID before sending a test message.",
-      resolvedChatId: null,
+      message: "No notification email destination is configured. Set a Clerk account email or NOTIFICATION_TO_EMAIL before sending a test email.",
+      resolvedEmailAddress: null,
     };
   }
 
   const now = new Date();
   const simulatedOccurrence = {
-    entryId: "telegram-test-timetable-entry",
+    entryId: "email-test-timetable-entry",
     subject: "Operating Systems",
     location: "Hall A",
     lecturer: "Dr. Mensah",
@@ -86,29 +89,24 @@ export async function sendTelegramTestMessage(userId: string) {
     reminderLeadMinutes: 30,
   };
 
-  const dueItem = buildTimetableDueItem(
-    simulatedOccurrence,
-    userId,
-    diagnostics.resolvedTelegramChatId,
-    now,
-  );
+  const dueItem = buildTimetableDueItem(simulatedOccurrence, userId, resolvedEmailAddress, now);
 
   if (!dueItem) {
     return {
       ok: false,
-      message: "Telegram timetable test could not be prepared.",
-      resolvedChatId: diagnostics.resolvedTelegramChatId,
+      message: "Email timetable test could not be prepared.",
+      resolvedEmailAddress,
     };
   }
 
-  const result = await sendTelegramMessage(formatDueItemMessage(dueItem));
+  const result = await sendNotificationEmail(formatDueItemEmail(dueItem));
 
   return {
     ok: result.ok,
     message: result.ok
-      ? "Telegram timetable test message sent successfully."
-      : `Telegram test failed: ${result.errorMessage ?? "Unknown Telegram error."}`,
-    resolvedChatId: diagnostics.resolvedTelegramChatId,
+      ? "Email timetable test message sent successfully."
+      : `Email test failed: ${result.errorMessage ?? "Unknown email error."}`,
+    resolvedEmailAddress,
   };
 }
 
@@ -121,13 +119,13 @@ export type DispatchDiagnosticsResult = {
 export async function dispatchNotificationDiagnostics(userId: string): Promise<DispatchDiagnosticsResult> {
   const user = await db.user.findUnique({
     where: { id: userId },
-    select: { telegramChatId: true },
+    select: { clerkUserId: true },
   });
 
-  if (!user?.telegramChatId && !getOptionalTelegramChatId()) {
+  if (!(await resolveNotificationRecipientEmail(user?.clerkUserId))) {
     return {
       ok: false,
-      message: "No Telegram destination is configured. Link your chat or set TELEGRAM_CHAT_ID before dispatching.",
+      message: "No notification email destination is configured. Set a Clerk account email or NOTIFICATION_TO_EMAIL before dispatching.",
       report: null,
     };
   }

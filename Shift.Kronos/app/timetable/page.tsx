@@ -24,7 +24,7 @@ export default async function TimetablePage() {
         <div>
           <h1 className="text-xl font-bold tracking-tight text-text-primary">Timetable</h1>
           <p className="mt-0.5 text-sm text-text-secondary">
-            Import your semester schedule, review weekly classes, and keep Telegram alerts aligned.
+            Import your semester schedule, review weekly classes, and keep email alerts aligned.
           </p>
         </div>
       </header>

@@ -1,6 +1,6 @@
 # Shift:Kronos
 
-Shift:Kronos is a personal AI-powered reminder, timetable, notes, and memory system built around one practical outcome: making sure important things reliably reach you through Telegram.
+Shift:Kronos is a personal AI-powered reminder, timetable, notes, and memory system built around one practical outcome: making sure important things reliably reach you through email.
 
 This repository now contains both the foundational product documentation and the first seven implementation phases so development can continue from a working application rather than planning alone.
 
@@ -20,10 +20,10 @@ Phase 7 polishing and operational hardening is now in place with:
 - deterministic timetable CRUD, JSON import validation, weekly view, and upcoming view
 - dashboard sections backed by stored reminder and timetable data
 - notification delivery selection across reminders and timetable occurrences
-- Telegram transport formatting, callback handling, and cron dispatch endpoints
-- notification deduplication, delivery state tracking, and callback action recording
+- email transport formatting, signed action handling, and cron dispatch endpoints
+- notification deduplication, delivery state tracking, and action recording
 - shared assistant orchestration for natural-language capture, grounded schedule answers, and validated reminder execution
-- dashboard quick capture, in-app chat, Telegram inbound text handling, and a voice-to-transcript action path
+- dashboard quick capture, in-app chat, and a voice-to-transcript action path
 - conversation and conversation-message persistence for assistant interactions
 - first-class notes CRUD with semantic indexing state
 - blob-backed file upload with extraction and indexing state
@@ -33,7 +33,7 @@ Phase 7 polishing and operational hardening is now in place with:
 - token-aware assistant context assembly over recent turns, retrieval-backed knowledge, and memory summaries
 - retrieval-backed continuity across sessions through indexed memory artifacts
 - authenticated JSON and CSV export flows over primary user records
-- structured operational logging and secret-verified cron/webhook entry points
+- structured operational logging and secret-verified cron/action entry points
 - route-level loading and error states across the major application surfaces
 - stronger mobile ergonomics and pending-state handling for key forms and actions
 - PWA installability through manifest metadata, icons, and safe static-asset caching
@@ -101,7 +101,7 @@ Shift:Kronos is intended to be:
 - single-user first
 - SQL-backed
 - hosted on Vercel
-- powered by Telegram notifications
+- powered by email notifications
 - optimized for fast capture and reliable reminders
 - progressively enhanced with AI chat, voice, memory, and semantic retrieval
 
@@ -116,7 +116,7 @@ The first documented scope includes:
 - class timetable support
 - notes
 - file attachments
-- Telegram quick actions
+- email quick actions
 - AI-assisted input parsing
 - a persistent memory system
 
@@ -131,7 +131,7 @@ The core UX principle is progressive disclosure:
 
 The next practical step after Phase 7 is selective post-hardening follow-through:
 
-1. deployed-environment verification of cron secret routing and Telegram webhook secret configuration
+1. deployed-environment verification of cron secret routing and signed email action configuration
 2. ongoing backup discipline using the new full JSON export path
 3. optional future monitoring-provider integration behind the new observability boundary
 4. later-phase product expansion only after the hardened baseline remains stable

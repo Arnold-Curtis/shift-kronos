@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { GlassCard } from "@/components/ui/glass-card";
 import { AiSettingsForm } from "@/components/settings/ai-settings-form";
-import { TelegramDiagnosticsCard } from "@/components/settings/telegram-diagnostics-card";
+import { EmailDiagnosticsCard } from "@/components/settings/email-diagnostics-card";
 import { requireCurrentUser } from "@/lib/current-user";
 import { getAssistantProviderOptions, getTranscriptionProviderOptions } from "@/lib/ai/preferences";
 import {
@@ -9,7 +9,7 @@ import {
   EXPORT_FORMAT,
 } from "@/lib/export/service";
 import { getResolvedUserAiSettings } from "@/lib/settings/service";
-import { getTelegramDiagnostics } from "@/lib/notifications/diagnostics";
+import { getEmailDiagnostics } from "@/lib/notifications/diagnostics";
 import {
   User,
   Globe,
@@ -33,7 +33,7 @@ export default async function MePage() {
   const assistantOptions = getAssistantProviderOptions();
   const transcriptionOptions = getTranscriptionProviderOptions();
   const aiSettings = getResolvedUserAiSettings(user as never);
-  const telegramDiagnostics = await getTelegramDiagnostics(user.id);
+  const emailDiagnostics = await getEmailDiagnostics(user.id);
 
   return (
     <div className="space-y-6 pb-4">
@@ -59,7 +59,7 @@ export default async function MePage() {
               </span>
               <span className="flex items-center gap-1">
                 <Send size={11} />
-                {user.telegramChatId ? "Telegram linked" : "Not linked"}
+                {emailDiagnostics.resolvedEmailAddress ? "Email ready" : "Not configured"}
               </span>
             </div>
           </div>
@@ -149,14 +149,14 @@ export default async function MePage() {
       <div className="space-y-3">
         <h2 className="flex items-center gap-2 px-1 text-xs font-semibold uppercase tracking-widest text-text-tertiary">
           <Send size={12} />
-          Telegram Delivery
+          Email Delivery
         </h2>
         <GlassCard>
-          <TelegramDiagnosticsCard
-            userTelegramChatId={telegramDiagnostics.userTelegramChatId}
-            fallbackTelegramChatId={telegramDiagnostics.fallbackTelegramChatId}
-            resolvedTelegramChatId={telegramDiagnostics.resolvedTelegramChatId}
-            recentFailures={telegramDiagnostics.recentFailures}
+          <EmailDiagnosticsCard
+            userEmailAddress={emailDiagnostics.userEmailAddress}
+            fallbackEmailAddress={emailDiagnostics.fallbackEmailAddress}
+            resolvedEmailAddress={emailDiagnostics.resolvedEmailAddress}
+            recentFailures={emailDiagnostics.recentFailures}
           />
         </GlassCard>
       </div>

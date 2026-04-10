@@ -8,8 +8,9 @@ const serverEnvSchema = z.object({
     .min(1, "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY is required"),
   NEXT_PUBLIC_APP_URL: z.string().url("NEXT_PUBLIC_APP_URL must be a valid URL"),
   BLOB_READ_WRITE_TOKEN: z.string().min(1, "BLOB_READ_WRITE_TOKEN is required"),
-  TELEGRAM_BOT_TOKEN: z.string().min(1, "TELEGRAM_BOT_TOKEN is required"),
-  TELEGRAM_CHAT_ID: z.string().min(1, "TELEGRAM_CHAT_ID must not be empty").optional(),
+  RESEND_API_KEY: z.string().min(1, "RESEND_API_KEY is required"),
+  NOTIFICATION_FROM_EMAIL: z.string().email("NOTIFICATION_FROM_EMAIL must be a valid email"),
+  NOTIFICATION_TO_EMAIL: z.string().email("NOTIFICATION_TO_EMAIL must be a valid email").optional(),
   GEMINI_API_KEY: z.string().min(1, "GEMINI_API_KEY is required"),
   GROQ_API_KEY: z.string().min(1, "GROQ_API_KEY is required"),
   OPENROUTER_API_KEY: z.string().min(1, "OPENROUTER_API_KEY is required"),
@@ -28,7 +29,7 @@ const serverEnvSchema = z.object({
   PHASE6_SUMMARY_TRIGGER_TOKENS: z.coerce.number().int().min(50).default(180),
   PHASE6_FAKE_SUMMARIES: z.enum(["0", "1"]).optional(),
   PHASE7_CRON_SECRET: z.string().min(1, "PHASE7_CRON_SECRET is required"),
-  PHASE7_TELEGRAM_WEBHOOK_SECRET: z.string().min(1, "PHASE7_TELEGRAM_WEBHOOK_SECRET is required"),
+  PHASE7_NOTIFICATION_ACTION_SECRET: z.string().min(1, "PHASE7_NOTIFICATION_ACTION_SECRET is required"),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
@@ -47,15 +48,17 @@ function withPreviewFallbacks(env: EnvSource): EnvSource {
       env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ?? "pk_test_preview",
     NEXT_PUBLIC_APP_URL: env.NEXT_PUBLIC_APP_URL ?? "https://shift-kronos-preview.vercel.app",
     BLOB_READ_WRITE_TOKEN: env.BLOB_READ_WRITE_TOKEN ?? "preview-blob-token",
-    TELEGRAM_BOT_TOKEN: env.TELEGRAM_BOT_TOKEN ?? "preview-telegram-token",
+    RESEND_API_KEY: env.RESEND_API_KEY ?? "preview-resend-key",
+    NOTIFICATION_FROM_EMAIL: env.NOTIFICATION_FROM_EMAIL ?? "notificationstoarnold@divasglamke.com",
+    NOTIFICATION_TO_EMAIL: env.NOTIFICATION_TO_EMAIL ?? "arnoldmbici@gmail.com",
     GEMINI_API_KEY: env.GEMINI_API_KEY ?? "preview-gemini-key",
     GROQ_API_KEY: env.GROQ_API_KEY ?? "preview-groq-key",
     OPENROUTER_API_KEY: env.OPENROUTER_API_KEY ?? "preview-openrouter-key",
     PHASE4_FAKE_AI: env.PHASE4_FAKE_AI ?? "1",
     PHASE6_FAKE_SUMMARIES: env.PHASE6_FAKE_SUMMARIES ?? "1",
     PHASE7_CRON_SECRET: env.PHASE7_CRON_SECRET ?? "preview-cron-secret",
-    PHASE7_TELEGRAM_WEBHOOK_SECRET:
-      env.PHASE7_TELEGRAM_WEBHOOK_SECRET ?? "preview-webhook-secret",
+    PHASE7_NOTIFICATION_ACTION_SECRET:
+      env.PHASE7_NOTIFICATION_ACTION_SECRET ?? "preview-notification-action-secret",
   };
 }
 
@@ -66,8 +69,9 @@ export function parseServerEnv(env: EnvSource): ServerEnv {
     NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
     NEXT_PUBLIC_APP_URL: env.NEXT_PUBLIC_APP_URL,
     BLOB_READ_WRITE_TOKEN: env.BLOB_READ_WRITE_TOKEN,
-    TELEGRAM_BOT_TOKEN: env.TELEGRAM_BOT_TOKEN,
-    TELEGRAM_CHAT_ID: env.TELEGRAM_CHAT_ID,
+    RESEND_API_KEY: env.RESEND_API_KEY,
+    NOTIFICATION_FROM_EMAIL: env.NOTIFICATION_FROM_EMAIL,
+    NOTIFICATION_TO_EMAIL: env.NOTIFICATION_TO_EMAIL,
     GEMINI_API_KEY: env.GEMINI_API_KEY,
     GROQ_API_KEY: env.GROQ_API_KEY,
     OPENROUTER_API_KEY: env.OPENROUTER_API_KEY,
@@ -86,7 +90,7 @@ export function parseServerEnv(env: EnvSource): ServerEnv {
     PHASE6_SUMMARY_TRIGGER_TOKENS: env.PHASE6_SUMMARY_TRIGGER_TOKENS,
     PHASE6_FAKE_SUMMARIES: env.PHASE6_FAKE_SUMMARIES,
     PHASE7_CRON_SECRET: env.PHASE7_CRON_SECRET,
-    PHASE7_TELEGRAM_WEBHOOK_SECRET: env.PHASE7_TELEGRAM_WEBHOOK_SECRET,
+    PHASE7_NOTIFICATION_ACTION_SECRET: env.PHASE7_NOTIFICATION_ACTION_SECRET,
   });
 }
 

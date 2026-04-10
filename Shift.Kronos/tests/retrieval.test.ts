@@ -38,7 +38,9 @@ describe("embedding provider", () => {
     process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY = "pk_test_123";
     process.env.NEXT_PUBLIC_APP_URL = "https://shift-kronos.test";
     process.env.BLOB_READ_WRITE_TOKEN = "vercel_blob_token";
-    process.env.TELEGRAM_BOT_TOKEN = "telegram_bot_token";
+    process.env.RESEND_API_KEY = "resend-key";
+    process.env.NOTIFICATION_FROM_EMAIL = "notificationstoarnold@divasglamke.com";
+    process.env.NOTIFICATION_TO_EMAIL = "arnoldmbici@gmail.com";
     process.env.GEMINI_API_KEY = "gemini_api_key";
     process.env.GROQ_API_KEY = "groq_api_key";
     process.env.OPENROUTER_API_KEY = "openrouter_api_key";
@@ -46,7 +48,7 @@ describe("embedding provider", () => {
     process.env.OPENROUTER_HTTP_REFERER = "https://shift-kronos.test";
     process.env.OPENROUTER_TITLE = "Shift:Kronos";
     process.env.PHASE7_CRON_SECRET = "phase7-cron-secret";
-    process.env.PHASE7_TELEGRAM_WEBHOOK_SECRET = "phase7-telegram-secret";
+    process.env.PHASE7_NOTIFICATION_ACTION_SECRET = "phase7-notification-secret";
 
     const result = await generateEmbedding("retrieval test input");
 
@@ -64,7 +66,9 @@ describe("embedding provider", () => {
     process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY = "pk_test_123";
     process.env.NEXT_PUBLIC_APP_URL = "https://shift-kronos.test";
     process.env.BLOB_READ_WRITE_TOKEN = "vercel_blob_token";
-    process.env.TELEGRAM_BOT_TOKEN = "telegram_bot_token";
+    process.env.RESEND_API_KEY = "resend-key";
+    process.env.NOTIFICATION_FROM_EMAIL = "notificationstoarnold@divasglamke.com";
+    process.env.NOTIFICATION_TO_EMAIL = "arnoldmbici@gmail.com";
     process.env.GEMINI_API_KEY = "gemini_api_key";
     process.env.GROQ_API_KEY = "groq_api_key";
     process.env.OPENROUTER_API_KEY = "openrouter_api_key";
@@ -72,7 +76,7 @@ describe("embedding provider", () => {
     process.env.OPENROUTER_HTTP_REFERER = "https://shift-kronos.test";
     process.env.OPENROUTER_TITLE = "Shift:Kronos";
     process.env.PHASE7_CRON_SECRET = "phase7-cron-secret";
-    process.env.PHASE7_TELEGRAM_WEBHOOK_SECRET = "phase7-telegram-secret";
+    process.env.PHASE7_NOTIFICATION_ACTION_SECRET = "phase7-notification-secret";
 
     const originalFetch = global.fetch;
     global.fetch = vi.fn(async () =>

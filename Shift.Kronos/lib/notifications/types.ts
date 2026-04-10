@@ -6,7 +6,7 @@ import {
   ReminderType,
 } from "@prisma/client";
 
-export const NOTIFICATION_TRANSPORT_TELEGRAM = "telegram";
+export const NOTIFICATION_TRANSPORT_EMAIL = "email";
 export const NOTIFICATION_SOURCE = {
   REMINDER: "REMINDER",
   TIMETABLE: "TIMETABLE",
@@ -14,15 +14,15 @@ export const NOTIFICATION_SOURCE = {
 
 export type NotificationSourceKind = (typeof NOTIFICATION_SOURCE)[keyof typeof NOTIFICATION_SOURCE];
 
-export const TELEGRAM_CALLBACK_VERSION = "v1";
+export const NOTIFICATION_ACTION_VERSION = "v1";
 
-export const TELEGRAM_ACTIONS = {
+export const NOTIFICATION_ACTIONS = {
   COMPLETE_REMINDER: "complete-reminder",
   SNOOZE_REMINDER: "snooze-reminder",
   ACK_TIMETABLE: "ack-timetable",
 } as const;
 
-export type TelegramActionType = (typeof TELEGRAM_ACTIONS)[keyof typeof TELEGRAM_ACTIONS];
+export type NotificationActionType = (typeof NOTIFICATION_ACTIONS)[keyof typeof NOTIFICATION_ACTIONS];
 
 export type DueReminderRecord = Pick<
   Reminder,
@@ -46,7 +46,7 @@ export type DueReminderRecord = Pick<
 
 type DueItemBase = {
   userId: string;
-  chatId: string;
+  recipientEmail: string;
   dedupeKey: string;
   notifyAt: Date;
   sourceOccurrenceKey: string;
@@ -59,7 +59,7 @@ export type ReminderDueItem = DueItemBase & {
   sourceId: string;
   reminderType: ReminderType;
   priority: ReminderPriority;
-  actionPayloads: TelegramCallbackPayload[];
+  actionPayloads: NotificationActionPayload[];
 };
 
 export type TimetableDueItem = DueItemBase & {
@@ -68,7 +68,7 @@ export type TimetableDueItem = DueItemBase & {
   startsAt: Date;
   endsAt: Date;
   reminderLeadMinutes: number;
-  actionPayloads: TelegramCallbackPayload[];
+  actionPayloads: NotificationActionPayload[];
 };
 
 export type DueItem = ReminderDueItem | TimetableDueItem;
@@ -108,40 +108,55 @@ export type NotificationDispatchReport = {
   results: DeliveryDispatchResult[];
 };
 
-export type TelegramCallbackPayload =
+export type NotificationActionPayload =
   | {
-      version: typeof TELEGRAM_CALLBACK_VERSION;
-      action: typeof TELEGRAM_ACTIONS.COMPLETE_REMINDER;
+      version: typeof NOTIFICATION_ACTION_VERSION;
+      userId: string;
+      action: typeof NOTIFICATION_ACTIONS.COMPLETE_REMINDER;
       reminderId: string;
       occurrenceKey: string;
+      issuedAt: string;
+      expiresAt: string;
     }
   | {
-      version: typeof TELEGRAM_CALLBACK_VERSION;
-      action: typeof TELEGRAM_ACTIONS.SNOOZE_REMINDER;
+      version: typeof NOTIFICATION_ACTION_VERSION;
+      userId: string;
+      action: typeof NOTIFICATION_ACTIONS.SNOOZE_REMINDER;
       reminderId: string;
       occurrenceKey: string;
       minutes: number;
+      issuedAt: string;
+      expiresAt: string;
     }
   | {
-      version: typeof TELEGRAM_CALLBACK_VERSION;
-      action: typeof TELEGRAM_ACTIONS.ACK_TIMETABLE;
+      version: typeof NOTIFICATION_ACTION_VERSION;
+      userId: string;
+      action: typeof NOTIFICATION_ACTIONS.ACK_TIMETABLE;
       timetableEntryId: string;
       occurrenceKey?: string;
+      issuedAt: string;
+      expiresAt: string;
     };
 
-export type TelegramSendMessageInput = {
-  chatId: string;
-  text: string;
-  inlineKeyboard?: Array<Array<{ text: string; callbackData: string }>>;
+export type NotificationEmailAction = {
+  label: string;
+  href: string;
 };
 
-export type TelegramSendMessageResult = {
+export type NotificationEmailInput = {
+  to: string;
+  subject: string;
+  text: string;
+  html: string;
+};
+
+export type NotificationEmailResult = {
   ok: boolean;
   messageId: string | null;
   errorMessage: string | null;
 };
 
-export type TelegramCallbackActionResult = {
+export type NotificationActionResult = {
   ok: boolean;
   message: string;
 };

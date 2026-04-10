@@ -7,8 +7,9 @@ const validEnv = {
   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: "pk_test_123",
   NEXT_PUBLIC_APP_URL: "https://shift-kronos.test",
   BLOB_READ_WRITE_TOKEN: "vercel_blob_token",
-  TELEGRAM_BOT_TOKEN: "telegram_bot_token",
-  TELEGRAM_CHAT_ID: "123456789",
+  RESEND_API_KEY: "resend-key",
+  NOTIFICATION_FROM_EMAIL: "notificationstoarnold@divasglamke.com",
+  NOTIFICATION_TO_EMAIL: "arnoldmbici@gmail.com",
   GEMINI_API_KEY: "gemini_api_key",
   GROQ_API_KEY: "groq_api_key",
   OPENROUTER_API_KEY: "openrouter_api_key",
@@ -26,7 +27,7 @@ const validEnv = {
   PHASE6_SUMMARY_TRIGGER_TOKENS: "180",
   PHASE6_FAKE_SUMMARIES: "1",
   PHASE7_CRON_SECRET: "phase7-cron-secret",
-  PHASE7_TELEGRAM_WEBHOOK_SECRET: "phase7-telegram-secret",
+  PHASE7_NOTIFICATION_ACTION_SECRET: "phase7-notification-secret",
 };
 
 describe("parseServerEnv", () => {
@@ -51,13 +52,13 @@ describe("parseServerEnv", () => {
     ).toThrow();
   });
 
-  it("allows Telegram chat id to be omitted for persisted user binding setups", () => {
+  it("allows the fallback notification email to be omitted", () => {
     const result = parseServerEnv({
       ...validEnv,
-      TELEGRAM_CHAT_ID: undefined,
+      NOTIFICATION_TO_EMAIL: undefined,
     });
 
-    expect(result.TELEGRAM_CHAT_ID).toBeUndefined();
+    expect(result.NOTIFICATION_TO_EMAIL).toBeUndefined();
   });
 
   it("parses the Phase 5 retrieval environment contract", () => {
@@ -92,6 +93,6 @@ describe("parseServerEnv", () => {
     const result = parseServerEnv(validEnv);
 
     expect(result.PHASE7_CRON_SECRET).toBe("phase7-cron-secret");
-    expect(result.PHASE7_TELEGRAM_WEBHOOK_SECRET).toBe("phase7-telegram-secret");
+    expect(result.PHASE7_NOTIFICATION_ACTION_SECRET).toBe("phase7-notification-secret");
   });
 });

@@ -13,18 +13,22 @@ function readRequiredEnv(key: string) {
   return value;
 }
 
-export function getOptionalTelegramChatId() {
-  return readOptionalEnv("TELEGRAM_CHAT_ID");
+export function getOptionalNotificationToEmail() {
+  return readOptionalEnv("NOTIFICATION_TO_EMAIL");
 }
 
-export function getTelegramBotToken() {
-  return readRequiredEnv("TELEGRAM_BOT_TOKEN");
+export function getNotificationFromEmail() {
+  return readRequiredEnv("NOTIFICATION_FROM_EMAIL");
+}
+
+export function getResendApiKey() {
+  return readRequiredEnv("RESEND_API_KEY");
 }
 
 export function getCronSecret() {
   return readRequiredEnv("PHASE7_CRON_SECRET");
 }
 
-export function getTelegramWebhookSecret() {
-  return readRequiredEnv("PHASE7_TELEGRAM_WEBHOOK_SECRET");
+export function getNotificationActionSecret() {
+  return readRequiredEnv("PHASE7_NOTIFICATION_ACTION_SECRET");
 }

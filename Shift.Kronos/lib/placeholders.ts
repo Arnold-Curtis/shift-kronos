@@ -10,7 +10,7 @@ export const integrationStatus = [
     detail: "The relational schema will anchor reminders, timetable, files, and memory records.",
   },
   {
-    name: "Telegram",
+    name: "Email delivery",
     state: "Planned boundary",
     detail: "Notification delivery stays outside the UI layer so scheduler work can arrive later cleanly.",
   },

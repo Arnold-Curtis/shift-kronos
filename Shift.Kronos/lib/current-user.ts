@@ -1,11 +1,11 @@
-import { auth, currentUser } from "@clerk/nextjs/server";
+import { auth, clerkClient, currentUser } from "@clerk/nextjs/server";
 import { User } from "@prisma/client";
 import { db } from "@/lib/db";
 
 const DEFAULT_TIMEZONE = "Africa/Nairobi";
 const PREVIEW_DEMO_CLERK_ID = "preview-demo-user";
 
-function shouldBypassClerk() {
+export function shouldBypassClerk() {
   if (process.env.VERCEL_ENV === "preview") {
     return true;
   }
@@ -21,6 +21,16 @@ function getPreferredDisplayName(user: Awaited<ReturnType<typeof currentUser>>) 
   const fullName = [user.firstName, user.lastName].filter(Boolean).join(" ").trim();
 
   return fullName || user.username || user.primaryEmailAddress?.emailAddress || null;
+}
+
+export async function getPrimaryEmailAddressForClerkUser(clerkUserId: string | null | undefined) {
+  if (!clerkUserId || shouldBypassClerk()) {
+    return null;
+  }
+
+  const client = await clerkClient();
+  const user = await client.users.getUser(clerkUserId);
+  return user.primaryEmailAddress?.emailAddress ?? null;
 }
 
 export async function requireCurrentUser(): Promise<User> {

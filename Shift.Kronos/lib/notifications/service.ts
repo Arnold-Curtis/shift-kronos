@@ -1,7 +1,7 @@
 import {
-  Prisma,
   NotificationEventStatus,
   NotificationSourceType,
+  Prisma,
   ReminderStatus,
   ReminderType,
 } from "@prisma/client";
@@ -15,47 +15,57 @@ import {
   createTimetableOccurrenceKey,
   describeReminderMetadata,
 } from "@/lib/notifications/keys";
-import { formatDueItemMessage } from "@/lib/notifications/telegram-format";
-import { TELEGRAM_ACTIONS } from "@/lib/notifications/types";
+import {
+  buildReminderActionPayloads,
+  buildTimetableActionPayloads,
+  formatDueItemEmail,
+} from "@/lib/notifications/email-format";
+import { sendNotificationEmail } from "@/lib/notifications/email";
+import { resolveNotificationRecipientEmail } from "@/lib/notifications/recipients";
 import {
   DeliveryDispatchResult,
   DueItem,
   DueReminderRecord,
   NOTIFICATION_SOURCE,
+  NOTIFICATION_TRANSPORT_EMAIL,
+  NotificationActionResult,
   NotificationDispatchReport,
   ReminderDueItem,
-  TelegramCallbackActionResult,
   TimetableDueItem,
 } from "@/lib/notifications/types";
-import { sendTelegramMessage } from "@/lib/notifications/telegram";
-import { resolveTelegramChatId } from "@/lib/notifications/diagnostics";
+import { logInfo, logWarn } from "@/lib/observability/logger";
 import { getNextRecurringDueAt } from "@/lib/reminders/recurrence";
 import { updateReminderStatus } from "@/lib/reminders/service";
 import { getTimetableOccurrencesInRange } from "@/lib/timetable/service";
-import { logInfo, logWarn } from "@/lib/observability/logger";
 
 const DISPATCH_MAX_RETRIES = 2;
 const DISPATCH_RETRY_BASE_DELAY_MS = 500;
-
 const TIMETABLE_LOOKBACK_MINUTES = 60;
 
-function isTransientTelegramError(errorMessage: string | null): boolean {
-  if (!errorMessage) return false;
+function isTransientEmailError(errorMessage: string | null) {
+  if (!errorMessage) {
+    return false;
+  }
+
   const transientSignals = [
-    "Too Many Requests",
-    "429",
-    "flood",
     "timeout",
-    "ETIMEDOUT",
-    "ECONNRESET",
-    "ECONNREFUSED",
+    "timed out",
+    "rate limit",
+    "too many requests",
+    "429",
     "network",
-    "SERVICE_UNAVAILABLE",
+    "service unavailable",
     "503",
     "502",
+    "504",
+    "temporarily unavailable",
+    "econnreset",
+    "econnrefused",
+    "etimedout",
   ];
   const lower = errorMessage.toLowerCase();
-  return transientSignals.some((signal) => lower.includes(signal.toLowerCase()));
+
+  return transientSignals.some((signal) => lower.includes(signal));
 }
 
 async function sleep(ms: number) {
@@ -92,7 +102,7 @@ export function isReminderDue(reminder: DueReminderRecord, now: Date) {
   return occurrenceDate.getTime() <= now.getTime();
 }
 
-export function buildReminderDueItem(reminder: DueReminderRecord, chatId: string, now: Date): ReminderDueItem | null {
+export function buildReminderDueItem(reminder: DueReminderRecord, recipientEmail: string, now: Date): ReminderDueItem | null {
   const occurrenceDate = getDueReminderOccurrenceDate(reminder, now);
 
   if (!occurrenceDate || occurrenceDate.getTime() > now.getTime()) {
@@ -101,11 +111,11 @@ export function buildReminderDueItem(reminder: DueReminderRecord, chatId: string
 
   const occurrenceKey = createReminderOccurrenceKey(reminder.id, occurrenceDate);
 
-    return {
+  return {
     sourceType: NOTIFICATION_SOURCE.REMINDER,
     sourceId: reminder.id,
     userId: reminder.userId,
-    chatId,
+    recipientEmail,
     title: reminder.title,
     bodyLines: [
       describeReminderMetadata(reminder.type, reminder.priority, reminder.category),
@@ -116,35 +126,7 @@ export function buildReminderDueItem(reminder: DueReminderRecord, chatId: string
     sourceOccurrenceKey: occurrenceKey,
     reminderType: reminder.type,
     priority: reminder.priority,
-    actionPayloads: [
-      {
-        version: "v1",
-        action: TELEGRAM_ACTIONS.COMPLETE_REMINDER,
-        reminderId: reminder.id,
-        occurrenceKey,
-      },
-      {
-        version: "v1",
-        action: TELEGRAM_ACTIONS.SNOOZE_REMINDER,
-        reminderId: reminder.id,
-        occurrenceKey,
-        minutes: 10,
-      },
-      {
-        version: "v1",
-        action: TELEGRAM_ACTIONS.SNOOZE_REMINDER,
-        reminderId: reminder.id,
-        occurrenceKey,
-        minutes: 30,
-      },
-      {
-        version: "v1",
-        action: TELEGRAM_ACTIONS.SNOOZE_REMINDER,
-        reminderId: reminder.id,
-        occurrenceKey,
-        minutes: 60,
-      },
-    ],
+    actionPayloads: buildReminderActionPayloads(reminder.userId, reminder.id, occurrenceKey, now),
   };
 }
 
@@ -159,7 +141,7 @@ export function buildTimetableDueItem(
     reminderLeadMinutes: number;
   },
   userId: string,
-  chatId: string,
+  recipientEmail: string,
   now: Date,
 ): TimetableDueItem | null {
   const notifyAt = subMinutes(occurrence.startsAt, occurrence.reminderLeadMinutes);
@@ -174,7 +156,7 @@ export function buildTimetableDueItem(
     sourceType: NOTIFICATION_SOURCE.TIMETABLE,
     sourceId: occurrence.entryId,
     userId,
-    chatId,
+    recipientEmail,
     title: occurrence.subject,
     bodyLines: [
       occurrence.location ? `Location: ${occurrence.location}` : "",
@@ -187,14 +169,7 @@ export function buildTimetableDueItem(
     reminderLeadMinutes: occurrence.reminderLeadMinutes,
     dedupeKey: createTimetableDedupeKey(occurrence.entryId, occurrence.startsAt, occurrence.reminderLeadMinutes),
     sourceOccurrenceKey: occurrenceKey,
-    actionPayloads: [
-      {
-        version: "v1",
-        action: TELEGRAM_ACTIONS.ACK_TIMETABLE,
-        timetableEntryId: occurrence.entryId,
-        occurrenceKey,
-      },
-    ],
+    actionPayloads: buildTimetableActionPayloads(userId, occurrence.entryId, occurrenceKey, now),
   };
 }
 
@@ -202,7 +177,7 @@ export async function getDueReminderNotifications(now: Date = new Date()) {
   const users = await db.user.findMany({
     select: {
       id: true,
-      telegramChatId: true,
+      clerkUserId: true,
       reminders: {
         where: {
           status: ReminderStatus.ACTIVE,
@@ -229,25 +204,29 @@ export async function getDueReminderNotifications(now: Date = new Date()) {
     },
   });
 
-  return users.flatMap((user) => {
-    const chatId = resolveTelegramChatId(user.telegramChatId);
+  const results = await Promise.all(
+    users.map(async (user) => {
+      const recipientEmail = await resolveNotificationRecipientEmail(user.clerkUserId);
 
-    if (!chatId) {
-      return [];
-    }
+      if (!recipientEmail) {
+        return [] as ReminderDueItem[];
+      }
 
-    return user.reminders
-      .filter((reminder) => reminder.type !== ReminderType.INBOX)
-      .map((reminder) => buildReminderDueItem(reminder, chatId, now))
-      .filter((item): item is ReminderDueItem => item !== null);
-  });
+      return user.reminders
+        .filter((reminder) => reminder.type !== ReminderType.INBOX)
+        .map((reminder) => buildReminderDueItem(reminder, recipientEmail, now))
+        .filter((item): item is ReminderDueItem => item !== null);
+    }),
+  );
+
+  return results.flat();
 }
 
 export async function getDueTimetableNotifications(now: Date = new Date()) {
   const users = await db.user.findMany({
     select: {
       id: true,
-      telegramChatId: true,
+      clerkUserId: true,
     },
   });
 
@@ -255,9 +234,9 @@ export async function getDueTimetableNotifications(now: Date = new Date()) {
 
   const results = await Promise.all(
     users.map(async (user) => {
-      const chatId = resolveTelegramChatId(user.telegramChatId);
+      const recipientEmail = await resolveNotificationRecipientEmail(user.clerkUserId);
 
-      if (!chatId) {
+      if (!recipientEmail) {
         return [] as TimetableDueItem[];
       }
 
@@ -267,7 +246,7 @@ export async function getDueTimetableNotifications(now: Date = new Date()) {
       });
 
       return occurrences
-        .map((occurrence) => buildTimetableDueItem(occurrence, user.id, chatId, now))
+        .map((occurrence) => buildTimetableDueItem(occurrence, user.id, recipientEmail, now))
         .filter((item): item is TimetableDueItem => item !== null);
     }),
   );
@@ -300,10 +279,11 @@ export async function getPendingDueItems(now: Date = new Date()) {
   });
 
   const existingKeys = new Set(existingEvents.map((event) => event.dedupeKey));
+  const dueItems = candidates.filter((item) => !existingKeys.has(item.dedupeKey));
 
   return {
-    dueItems: candidates.filter((item) => !existingKeys.has(item.dedupeKey)),
-    skippedCount: candidates.length - candidates.filter((item) => !existingKeys.has(item.dedupeKey)).length,
+    dueItems,
+    skippedCount: candidates.length - dueItems.length,
   };
 }
 
@@ -315,7 +295,7 @@ export async function reserveNotification(dueItem: DueItem) {
       timetableEntryId: dueItem.sourceType === NOTIFICATION_SOURCE.TIMETABLE ? dueItem.sourceId : null,
       sourceType: dueItem.sourceType,
       sourceOccurrenceKey: dueItem.sourceOccurrenceKey,
-      transport: "telegram",
+      transport: NOTIFICATION_TRANSPORT_EMAIL,
       dedupeKey: dueItem.dedupeKey,
       status: NotificationEventStatus.PENDING,
       lastAttemptAt: new Date(),
@@ -377,10 +357,7 @@ export async function dispatchPendingNotifications(now: Date = new Date()): Prom
     try {
       reservation = await reserveNotification(dueItem);
     } catch (error) {
-      if (
-        error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === "P2002"
-      ) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
         logWarn("notifications.dispatch.duplicate_reservation", {
           dedupeKey: dueItem.dedupeKey,
         });
@@ -397,11 +374,11 @@ export async function dispatchPendingNotifications(now: Date = new Date()): Prom
       throw error;
     }
 
-    const message = formatDueItemMessage(dueItem);
-    let sendResult = await sendTelegramMessage(message);
+    const message = formatDueItemEmail(dueItem);
+    let sendResult = await sendNotificationEmail(message);
     let attempt = 1;
 
-    while (!sendResult.ok && attempt <= DISPATCH_MAX_RETRIES && isTransientTelegramError(sendResult.errorMessage)) {
+    while (!sendResult.ok && attempt <= DISPATCH_MAX_RETRIES && isTransientEmailError(sendResult.errorMessage)) {
       const delay = DISPATCH_RETRY_BASE_DELAY_MS * Math.pow(2, attempt - 1);
       logWarn("notifications.dispatch.transient_retry", {
         dedupeKey: dueItem.dedupeKey,
@@ -410,7 +387,7 @@ export async function dispatchPendingNotifications(now: Date = new Date()): Prom
         errorMessage: sendResult.errorMessage,
       });
       await sleep(delay);
-      sendResult = await sendTelegramMessage(message);
+      sendResult = await sendNotificationEmail(message);
       attempt++;
     }
 
@@ -426,7 +403,7 @@ export async function dispatchPendingNotifications(now: Date = new Date()): Prom
       continue;
     }
 
-    const failureReason = sendResult.errorMessage ?? "Unknown Telegram error.";
+    const failureReason = sendResult.errorMessage ?? "Unknown email error.";
     await markNotificationFailed(reservation.id, failureReason);
     logWarn("notifications.dispatch.delivery_failed", {
       dedupeKey: dueItem.dedupeKey,
@@ -442,18 +419,21 @@ export async function dispatchPendingNotifications(now: Date = new Date()): Prom
     });
   }
 
+  const deliveredCount = results.filter((result) => result.status === NotificationEventStatus.DELIVERED).length;
+  const failedCount = results.filter((result) => result.status === NotificationEventStatus.FAILED).length;
+
   logInfo("notifications.dispatch.complete", {
     selectedCount: dueItems.length,
-    deliveredCount: results.filter((r) => r.status === NotificationEventStatus.DELIVERED).length,
-    failedCount: results.filter((r) => r.status === NotificationEventStatus.FAILED).length,
+    deliveredCount,
+    failedCount,
     skippedCount,
   });
 
   return {
     selectedCount: dueItems.length,
     skippedCount,
-    deliveredCount: results.filter((result) => result.status === NotificationEventStatus.DELIVERED).length,
-    failedCount: results.filter((result) => result.status === NotificationEventStatus.FAILED).length,
+    deliveredCount,
+    failedCount,
     results,
   };
 }
@@ -470,7 +450,7 @@ export async function completeReminderFromNotification(userId: string, reminderI
     return {
       ok: false,
       message: "Reminder not found.",
-    } satisfies TelegramCallbackActionResult;
+    } satisfies NotificationActionResult;
   }
 
   if (reminder.type === ReminderType.RECURRING || reminder.type === ReminderType.HABIT) {
@@ -492,7 +472,7 @@ export async function completeReminderFromNotification(userId: string, reminderI
       message: nextDueAt
         ? `Recurring reminder recorded. Next occurrence: ${formatDateTimeLabel(nextDueAt)}.`
         : "Recurring reminder recorded.",
-    } satisfies TelegramCallbackActionResult;
+    } satisfies NotificationActionResult;
   }
 
   await updateReminderStatus(userId, {
@@ -503,7 +483,7 @@ export async function completeReminderFromNotification(userId: string, reminderI
   return {
     ok: true,
     message: "Reminder completed.",
-  } satisfies TelegramCallbackActionResult;
+  } satisfies NotificationActionResult;
 }
 
 export async function snoozeReminderFromNotification(userId: string, reminderId: string, minutes: number) {
@@ -518,7 +498,7 @@ export async function snoozeReminderFromNotification(userId: string, reminderId:
     return {
       ok: false,
       message: "Reminder not found.",
-    } satisfies TelegramCallbackActionResult;
+    } satisfies NotificationActionResult;
   }
 
   const base = reminder.snoozedUntil && reminder.snoozedUntil > new Date() ? reminder.snoozedUntil : new Date();
@@ -537,7 +517,7 @@ export async function snoozeReminderFromNotification(userId: string, reminderId:
   return {
     ok: true,
     message: `Reminder snoozed until ${formatDateTimeLabel(snoozedUntil)}.`,
-  } satisfies TelegramCallbackActionResult;
+  } satisfies NotificationActionResult;
 }
 
 export async function acknowledgeTimetableNotification(
@@ -575,5 +555,5 @@ export async function acknowledgeTimetableNotification(
   return {
     ok: true,
     message: "Class alert acknowledged.",
-  } satisfies TelegramCallbackActionResult;
+  } satisfies NotificationActionResult;
 }
