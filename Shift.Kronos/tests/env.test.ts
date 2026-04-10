@@ -61,6 +61,17 @@ describe("parseServerEnv", () => {
     expect(result.NOTIFICATION_TO_EMAIL).toBeUndefined();
   });
 
+  it("trims whitespace around email env values", () => {
+    const result = parseServerEnv({
+      ...validEnv,
+      NOTIFICATION_FROM_EMAIL: "  notificationstoarnold@divasglamke.com\n",
+      NOTIFICATION_TO_EMAIL: "  arnoldmbici@gmail.com\r\n",
+    });
+
+    expect(result.NOTIFICATION_FROM_EMAIL).toBe("notificationstoarnold@divasglamke.com");
+    expect(result.NOTIFICATION_TO_EMAIL).toBe("arnoldmbici@gmail.com");
+  });
+
   it("parses the Phase 5 retrieval environment contract", () => {
     const result = parseServerEnv(validEnv);
 

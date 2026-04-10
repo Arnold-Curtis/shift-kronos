@@ -1,23 +1,24 @@
 import { z } from "zod";
 
 const serverEnvSchema = z.object({
-  DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
-  CLERK_SECRET_KEY: z.string().min(1, "CLERK_SECRET_KEY is required"),
+  DATABASE_URL: z.string().trim().min(1, "DATABASE_URL is required"),
+  CLERK_SECRET_KEY: z.string().trim().min(1, "CLERK_SECRET_KEY is required"),
   NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: z
     .string()
+    .trim()
     .min(1, "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY is required"),
-  NEXT_PUBLIC_APP_URL: z.string().url("NEXT_PUBLIC_APP_URL must be a valid URL"),
-  BLOB_READ_WRITE_TOKEN: z.string().min(1, "BLOB_READ_WRITE_TOKEN is required"),
-  RESEND_API_KEY: z.string().min(1, "RESEND_API_KEY is required"),
-  NOTIFICATION_FROM_EMAIL: z.string().email("NOTIFICATION_FROM_EMAIL must be a valid email"),
-  NOTIFICATION_TO_EMAIL: z.string().email("NOTIFICATION_TO_EMAIL must be a valid email").optional(),
-  GEMINI_API_KEY: z.string().min(1, "GEMINI_API_KEY is required"),
-  GROQ_API_KEY: z.string().min(1, "GROQ_API_KEY is required"),
-  OPENROUTER_API_KEY: z.string().min(1, "OPENROUTER_API_KEY is required"),
-  OPENROUTER_BASE_URL: z.string().url("OPENROUTER_BASE_URL must be a valid URL").default("https://openrouter.ai/api/v1"),
-  OPENROUTER_HTTP_REFERER: z.string().url("OPENROUTER_HTTP_REFERER must be a valid URL").optional(),
+  NEXT_PUBLIC_APP_URL: z.string().trim().url("NEXT_PUBLIC_APP_URL must be a valid URL"),
+  BLOB_READ_WRITE_TOKEN: z.string().trim().min(1, "BLOB_READ_WRITE_TOKEN is required"),
+  RESEND_API_KEY: z.string().trim().min(1, "RESEND_API_KEY is required"),
+  NOTIFICATION_FROM_EMAIL: z.string().trim().email("NOTIFICATION_FROM_EMAIL must be a valid email"),
+  NOTIFICATION_TO_EMAIL: z.string().trim().email("NOTIFICATION_TO_EMAIL must be a valid email").optional(),
+  GEMINI_API_KEY: z.string().trim().min(1, "GEMINI_API_KEY is required"),
+  GROQ_API_KEY: z.string().trim().min(1, "GROQ_API_KEY is required"),
+  OPENROUTER_API_KEY: z.string().trim().min(1, "OPENROUTER_API_KEY is required"),
+  OPENROUTER_BASE_URL: z.string().trim().url("OPENROUTER_BASE_URL must be a valid URL").default("https://openrouter.ai/api/v1"),
+  OPENROUTER_HTTP_REFERER: z.string().trim().url("OPENROUTER_HTTP_REFERER must be a valid URL").optional(),
   OPENROUTER_TITLE: z.string().trim().min(1, "OPENROUTER_TITLE must not be empty").optional(),
-  GOOGLE_APPLICATION_CREDENTIALS: z.string().min(1).optional(),
+  GOOGLE_APPLICATION_CREDENTIALS: z.string().trim().min(1).optional(),
   PHASE4_FAKE_AI: z.enum(["0", "1"]).optional(),
   PHASE5_EMBEDDING_MODEL: z.string().min(1, "PHASE5_EMBEDDING_MODEL is required").default("gemini-embedding-001"),
   PHASE5_EMBEDDING_DIMENSIONS: z.coerce.number().int().min(1).default(768),
@@ -28,8 +29,8 @@ const serverEnvSchema = z.object({
   PHASE6_SUMMARY_MIN_MESSAGES: z.coerce.number().int().min(2).default(6),
   PHASE6_SUMMARY_TRIGGER_TOKENS: z.coerce.number().int().min(50).default(180),
   PHASE6_FAKE_SUMMARIES: z.enum(["0", "1"]).optional(),
-  PHASE7_CRON_SECRET: z.string().min(1, "PHASE7_CRON_SECRET is required"),
-  PHASE7_NOTIFICATION_ACTION_SECRET: z.string().min(1, "PHASE7_NOTIFICATION_ACTION_SECRET is required"),
+  PHASE7_CRON_SECRET: z.string().trim().min(1, "PHASE7_CRON_SECRET is required"),
+  PHASE7_NOTIFICATION_ACTION_SECRET: z.string().trim().min(1, "PHASE7_NOTIFICATION_ACTION_SECRET is required"),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
